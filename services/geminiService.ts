@@ -231,14 +231,12 @@ export const generateVanillaStory = async (provider: ModelProvider): Promise<str
 
 const calculateCSR = (steps: GenerationStep[]): number => {
     if (steps.length === 0) return 0;
-    const totalRetries = steps.reduce((acc, step) => acc + step.retryCount, 0);
-    // CSR = Steps Completed / (Steps Completed + Retries needed)
-    // If 15 steps took 15 tries (0 retries), CSR is 100%
-    // If 15 steps took 30 tries (15 retries), CSR is 50%
-    return (steps.length / (steps.length + totalRetries)) * 100;
+    // Updated Logic: CSR is the percentage of steps that required 0 retries (Passed First Try)
+    const passedFirstTry = steps.filter(s => s.retryCount === 0).length;
+    return (passedFirstTry / steps.length) * 100;
 };
 
-const calculateSelfBleuProxy = (text: string): { selfBleu: number, uniqueNGrams: number } => {
+export const calculateSelfBleuProxy = (text: string): { selfBleu: number, uniqueNGrams: number } => {
     // A simplified simulation of Self-BLEU for the browser environment
     // We calculate the ratio of repeated 3-grams to unique 3-grams
     // Lower score is better (less repetitive)

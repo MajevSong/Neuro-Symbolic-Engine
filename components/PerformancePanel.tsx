@@ -1,6 +1,7 @@
 import React from 'react';
 import { GenerationStep, EvaluationResult } from '../types';
-import { Zap, Brain, FileText, AlertOctagon, Info } from 'lucide-react';
+import { Zap, Brain, FileText, AlertOctagon, Info, ShieldCheck, Fingerprint, Hash } from 'lucide-react';
+import { calculateSelfBleuProxy } from '../services/geminiService';
 
 interface PerformancePanelProps {
   steps: GenerationStep[];
@@ -44,6 +45,17 @@ const PerformancePanel: React.FC<PerformancePanelProps> = ({ steps, evaluation }
   const totalRetries = steps.reduce((acc, step) => acc + step.retryCount, 0);
   const totalWords = steps.reduce((acc, step) => acc + step.generatedText.split(/\s+/).length, 0);
 
+  // CSR: Percentage of steps generated with 0 retries (Passed 1st try)
+  const csr = steps.length > 0
+    ? ((steps.filter(s => s.retryCount === 0).length / steps.length) * 100).toFixed(1)
+    : '--';
+
+  // Self-BLEU & Vocab Calculation
+  const fullText = steps.map(s => s.generatedText).join(' ');
+  const selfBleuStats = fullText.length > 20 ? calculateSelfBleuProxy(fullText) : { selfBleu: 0, uniqueNGrams: 0 };
+  const displaySelfBleu = fullText.length > 50 ? selfBleuStats.selfBleu.toFixed(2) : '--';
+  const displayVocab = fullText.length > 50 ? selfBleuStats.uniqueNGrams : '--';
+
   return (
     <div className="grid grid-cols-2 gap-3 mb-6 relative">
       <MetricCard 
@@ -56,12 +68,12 @@ const PerformancePanel: React.FC<PerformancePanelProps> = ({ steps, evaluation }
       />
 
       <MetricCard 
-        label="Total Output" 
-        value={totalWords} 
-        unit=" words" 
-        icon={FileText} 
-        iconColor="text-blue-400"
-        tooltip="Cumulative volume of the narrative generated so far. Higher volume with high coherence indicates successful long-context handling."
+        label="CSR (Adherence)" 
+        value={csr} 
+        unit="%" 
+        icon={ShieldCheck} 
+        iconColor="text-cyan-400"
+        tooltip="Constraint Satisfaction Rate. The percentage of generated segments that passed the Logic Verifier on the first try (Zero-Shot)."
       />
 
       <MetricCard 
@@ -72,11 +84,38 @@ const PerformancePanel: React.FC<PerformancePanelProps> = ({ steps, evaluation }
         tooltip="Number of times System 2 (Neural) was rejected by System 1 (Symbolic) because it failed to meet the plot constraints."
       />
 
-      {/* Metric 4: AI Judge Score (Preview) */}
-      <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 flex flex-col justify-between relative overflow-hidden group">
+      <MetricCard 
+        label="Diversity (S-BLEU)" 
+        value={displaySelfBleu} 
+        unit=""
+        icon={Fingerprint} 
+        iconColor={typeof displaySelfBleu === 'string' || Number(displaySelfBleu) < 0.4 ? "text-emerald-400" : "text-amber-400"}
+        tooltip="Self-BLEU Score (0.0-1.0). Lower is better. Measures lexical diversity based on n-gram overlap. High scores indicate repetitive loops."
+      />
+
+      <MetricCard 
+        label="Unique 3-grams" 
+        value={displayVocab} 
+        unit="" 
+        icon={Hash} 
+        iconColor="text-indigo-400"
+        tooltip="Vocabulary Richness. Count of unique 3-word combinations found in the generated story so far."
+      />
+
+      <MetricCard 
+        label="Total Output" 
+        value={totalWords} 
+        unit=" words" 
+        icon={FileText} 
+        iconColor="text-blue-400"
+        tooltip="Cumulative volume of the narrative generated so far. Higher volume with high coherence indicates successful long-context handling."
+      />
+
+      {/* Metric: AI Judge Score (Preview) */}
+      <div className="col-span-2 bg-slate-800 p-3 rounded-lg border border-slate-700 flex flex-col justify-between relative overflow-hidden group">
         <div className="flex items-center gap-2 text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1 z-10">
           <Zap size={12} className="text-purple-400" />
-          <span>Final Quality</span>
+          <span>Final Quality Estimate</span>
           <Info size={10} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
         </div>
         <div className="text-xl font-mono text-slate-100 font-bold z-10">

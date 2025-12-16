@@ -52,3 +52,11 @@ export interface DatasetStats {
   distribution: Record<EventType, number>;
   mostCommonPath: string[];
 }
+
+export interface SavedModel {
+  type: 'neuro-symbolic-model';
+  version: string;
+  timestamp: string;
+  matrices: TimeSlicedMatrices;
+  stats: DatasetStats;
+}

@@ -18,7 +18,7 @@ export const trainModelFromDataset = async (
       try {
         const text = e.target?.result as string;
         
-        onProgress(5, "Reading Dataset & Initializing Mistral Small Pipeline...");
+        onProgress(5, "Reading Dataset...");
         
         // 1. Parse JSON
         let data: StoryRecord[] = [];
@@ -38,7 +38,7 @@ export const trainModelFromDataset = async (
         const SAMPLE_LIMIT = 50; 
         const storiesToProcess = data.slice(0, SAMPLE_LIMIT);
 
-        onProgress(10, `Queued ${storiesToProcess.length} stories for Mistral Small (24B) analysis...`);
+        onProgress(10, `Initializing Analysis (${storiesToProcess.length} samples)...`);
 
         // Initialize counters
         const transitionCounts: Record<number, Record<string, Record<string, number>>> = {};
@@ -60,7 +60,8 @@ export const trainModelFromDataset = async (
             const story = storiesToProcess[i];
             const percent = 10 + Math.floor((i / storiesToProcess.length) * 80);
             
-            onProgress(percent, `Analyzing Story ${i + 1}/${storiesToProcess.length} (Mistral-Small:24b)...`);
+            // Clear differentiation: Analyzing Story X/Y
+            onProgress(percent, `Analyzing Story ${i + 1}/${storiesToProcess.length}`);
             
             // Allow UI update
             await new Promise(r => setTimeout(r, 10));
@@ -115,7 +116,7 @@ Return strictly a JSON object: { "label": "CATEGORY_NAME" }
             }
         }
 
-        onProgress(95, "Calculating Markov Probabilities...");
+        onProgress(95, "Calculating Probabilities...");
         
         const learnedMatrices: TimeSlicedMatrices = [];
 

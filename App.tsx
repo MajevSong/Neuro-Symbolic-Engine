@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { EventType, GenerationStep, TimeSlicedMatrices, EvaluationResult, ModelProvider, DatasetStats } from './types';
+import { EventType, GenerationStep, TimeSlicedMatrices, EvaluationResult, ModelProvider, DatasetStats, SavedModel } from './types';
 import { DEFAULT_MATRICES, TOTAL_STEPS } from './constants';
 import { generateStorySegment, verifySegment, evaluateStory, generateVanillaStory } from './services/geminiService';
 import { trainModelFromDataset } from './services/trainingService';
@@ -70,12 +70,57 @@ const App: React.FC = () => {
     return weightedEntries[weightedEntries.length - 1][0]; // Fallback
   };
 
-  // --- Training Handler ---
+  // --- Training & Load Handler ---
   const handleFileUpload = async (file: File) => {
     setIsTraining(true);
     setTrainingProgress(0);
-    setTrainingStatus("Initializing...");
+    setTrainingStatus("Inspecting file...");
+
+    const reader = new FileReader();
     
+    reader.onload = async (e) => {
+        try {
+            const text = e.target?.result as string;
+            const json = JSON.parse(text);
+
+            // CASE A: It is a Saved Model (Pre-trained)
+            if (json.type === 'neuro-symbolic-model' && json.matrices && json.stats) {
+                 setTrainingProgress(100);
+                 setTrainingStatus("Restoring saved model state...");
+                 await new Promise(r => setTimeout(r, 500)); // Visual pause
+                 
+                 const savedModel = json as SavedModel;
+                 setMatrices(savedModel.matrices);
+                 setDatasetStats(savedModel.stats);
+                 setStatusMessage(`Model Loaded: Version ${savedModel.version} (${savedModel.timestamp}). Ready for simulation.`);
+                 setIsTraining(false);
+                 return;
+            }
+
+            // CASE B: It is a Raw Dataset -> Start Training
+            // If it's an array, or has 'text' fields, we assume it's data
+            if (Array.isArray(json) || (typeof json === 'object' && !json.matrices)) {
+                 await runTrainingProcess(file);
+            } else {
+                 throw new Error("Unknown file format. Please upload a .json dataset or a saved model.");
+            }
+
+        } catch (err) {
+            console.error(err);
+            setStatusMessage("File Error: " + (err instanceof Error ? err.message : String(err)));
+            setIsTraining(false);
+        }
+    };
+
+    reader.onerror = () => {
+        setStatusMessage("Failed to read file.");
+        setIsTraining(false);
+    };
+
+    reader.readAsText(file);
+  };
+
+  const runTrainingProcess = async (file: File) => {
     try {
         const result = await trainModelFromDataset(file, (percent, msg) => {
             setTrainingProgress(percent);
@@ -87,8 +132,7 @@ const App: React.FC = () => {
         setStatusMessage(`Training complete. Analyzed ${result.stats.count} stories and updated transition matrices.`);
     } catch (e) {
         console.error(e);
-        setStatusMessage("Training failed: " + e);
-        throw e;
+        setStatusMessage("Training failed: " + (e instanceof Error ? e.message : String(e)));
     } finally {
         setIsTraining(false);
     }
@@ -270,6 +314,7 @@ const App: React.FC = () => {
              trainingProgress={trainingProgress}
              trainingStatus={trainingStatus}
              datasetStats={datasetStats}
+             matrices={matrices}
            />
 
            <EngineControl 

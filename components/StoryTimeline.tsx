@@ -31,14 +31,14 @@ const StoryTimeline: React.FC<StoryTimelineProps> = ({ steps, vanillaStory }) =>
     }
   }, [vanillaStory, activeTab]);
 
-  const handleDownloadPart = (part: 'setup' | 'development' | 'resolution') => {
+  const handleDownloadPart = (part: 'introduction' | 'conflict' | 'resolution') => {
       let start = 0;
       let end = 0;
-      let label = "";
-
-      if (part === 'setup') { start = 0; end = 4; label = "Part 1 - Setup"; }
-      if (part === 'development') { start = 4; end = 11; label = "Part 2 - Development"; }
-      if (part === 'resolution') { start = 11; end = 15; label = "Part 3 - Resolution"; }
+      
+      // Mapping phases to step indices based on constants.ts (TOTAL_STEPS=15)
+      if (part === 'introduction') { start = 0; end = 4; } // Steps 0-3 (Setup)
+      if (part === 'conflict') { start = 4; end = 11; } // Steps 4-10 (Development)
+      if (part === 'resolution') { start = 11; end = 15; } // Steps 11-14 (Conclusion)
 
       const text = steps.slice(start, end).map(s => s.generatedText).join('\n\n');
       
@@ -58,17 +58,32 @@ const StoryTimeline: React.FC<StoryTimelineProps> = ({ steps, vanillaStory }) =>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <h3 className="text-lg font-bold text-slate-100">Narrative Output</h3>
         
-        <div className="flex gap-2">
-            {steps.length > 5 && activeTab === 'neuro' && (
-                <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
-                   <button onClick={() => handleDownloadPart('setup')} className="px-2 py-1 text-[10px] text-slate-300 hover:text-white hover:bg-slate-700 rounded transition">
-                       DL Setup
+        <div className="flex gap-2 items-center">
+            {steps.length > 0 && activeTab === 'neuro' && (
+                <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700 gap-1 mr-2">
+                   <button 
+                     onClick={() => handleDownloadPart('introduction')} 
+                     disabled={steps.length < 4}
+                     className="px-2 py-1 text-[10px] text-slate-300 hover:text-white hover:bg-slate-700 rounded transition flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                     title="Download Setup Phase (Steps 0-3)"
+                   >
+                       <Download size={10} /> Intro
                    </button>
-                   <button onClick={() => handleDownloadPart('development')} className="px-2 py-1 text-[10px] text-slate-300 hover:text-white hover:bg-slate-700 rounded transition">
-                       DL Mid
+                   <button 
+                     onClick={() => handleDownloadPart('conflict')} 
+                     disabled={steps.length < 11}
+                     className="px-2 py-1 text-[10px] text-slate-300 hover:text-white hover:bg-slate-700 rounded transition flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                     title="Download Development Phase (Steps 4-10)"
+                   >
+                       <Download size={10} /> Conflict
                    </button>
-                   <button onClick={() => handleDownloadPart('resolution')} className="px-2 py-1 text-[10px] text-slate-300 hover:text-white hover:bg-slate-700 rounded transition">
-                       DL End
+                   <button 
+                     onClick={() => handleDownloadPart('resolution')} 
+                     disabled={steps.length < 15}
+                     className="px-2 py-1 text-[10px] text-slate-300 hover:text-white hover:bg-slate-700 rounded transition flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                     title="Download Resolution Phase (Steps 11-14)"
+                   >
+                       <Download size={10} /> Resolution
                    </button>
                 </div>
             )}

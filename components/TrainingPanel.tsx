@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { Upload, Database, CheckCircle, AlertCircle, Loader2, BarChart2, Brain, Zap } from 'lucide-react';
-import { DatasetStats } from '../types';
+import { Upload, CheckCircle, AlertCircle, Loader2, BarChart2, Brain, Zap, FileText, Save } from 'lucide-react';
+import { DatasetStats, SavedModel, TimeSlicedMatrices } from '../types';
 
 interface TrainingPanelProps {
   onFileUpload: (file: File) => Promise<void>;
@@ -8,6 +8,7 @@ interface TrainingPanelProps {
   trainingProgress: number;
   trainingStatus: string;
   datasetStats: DatasetStats | null;
+  matrices: TimeSlicedMatrices;
 }
 
 const TrainingPanel: React.FC<TrainingPanelProps> = ({ 
@@ -15,7 +16,8 @@ const TrainingPanel: React.FC<TrainingPanelProps> = ({
   isTraining, 
   trainingProgress, 
   trainingStatus,
-  datasetStats 
+  datasetStats,
+  matrices
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +37,28 @@ const TrainingPanel: React.FC<TrainingPanelProps> = ({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown training error");
     }
+  };
+
+  const handleSaveModel = () => {
+      if (!datasetStats || !matrices) return;
+
+      const savedModel: SavedModel = {
+          type: 'neuro-symbolic-model',
+          version: '1.0',
+          timestamp: new Date().toISOString(),
+          matrices: matrices,
+          stats: datasetStats
+      };
+
+      const blob = new Blob([JSON.stringify(savedModel, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `neuro_symbolic_model_${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
   };
 
   // Helper to find percentage for stats visualization
@@ -66,6 +90,14 @@ const TrainingPanel: React.FC<TrainingPanelProps> = ({
               ))}
           </div>
       );
+  };
+
+  // Helper to determine status icon
+  const getStatusIcon = (status: string) => {
+      if (status.includes("Reading")) return <FileText size={16} className="text-blue-400 animate-pulse" />;
+      if (status.includes("Analyzing")) return <Brain size={16} className="text-pink-400 animate-pulse" />;
+      if (status.includes("Calculating")) return <BarChart2 size={16} className="text-emerald-400 animate-pulse" />;
+      return <Loader2 size={16} className="text-slate-400 animate-spin" />;
   };
 
   return (
@@ -101,9 +133,9 @@ const TrainingPanel: React.FC<TrainingPanelProps> = ({
             className="border-2 border-dashed border-slate-600 hover:border-pink-500 rounded-lg p-8 text-center cursor-pointer transition-colors bg-slate-900/50 hover:bg-slate-800"
           >
             <Upload className="mx-auto h-10 w-10 text-slate-500 group-hover:text-pink-400 transition-colors mb-3" />
-            <p className="text-sm text-slate-300 font-medium">Load 'stories.json' Dataset</p>
+            <p className="text-sm text-slate-300 font-medium">Load Dataset or Saved Model</p>
             <p className="text-xs text-slate-500 mt-1">
-                Will analyze via local Ollama (mistral-small:24b). Ensure Ollama is running.
+                Upload <code>stories.json</code> to train OR a <code>model.json</code> to load instantly.
             </p>
           </div>
         )}
@@ -113,8 +145,15 @@ const TrainingPanel: React.FC<TrainingPanelProps> = ({
                  <div className="flex justify-center mb-4">
                     <Loader2 className="animate-spin text-pink-500" size={32} />
                  </div>
-                 <h3 className="text-slate-200 font-bold mb-1">Training on Local GPU...</h3>
-                 <p className="text-xs text-slate-400 font-mono mb-4">{trainingStatus}</p>
+                 <h3 className="text-slate-200 font-bold mb-3">Training on Local GPU...</h3>
+                 
+                 {/* Enhanced Status Message */}
+                 <div className="bg-slate-800/80 rounded-lg p-3 mb-4 border border-slate-700/50 inline-flex items-center gap-3 px-6 mx-auto shadow-inner">
+                     {getStatusIcon(trainingStatus)}
+                     <p className="text-sm text-indigo-300 font-mono font-medium">
+                        {trainingStatus}
+                     </p>
+                 </div>
                  
                  <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden mb-2">
                     <div 
@@ -128,9 +167,19 @@ const TrainingPanel: React.FC<TrainingPanelProps> = ({
         {datasetStats && !isTraining && (
            <div>
                <div className="bg-slate-900 rounded-lg p-4 border border-slate-700 mb-4">
-                    <div className="flex items-center gap-2 mb-2">
-                        <BarChart2 size={16} className="text-indigo-400"/>
-                        <span className="text-xs font-bold text-slate-300 uppercase">Mistral Classification Stats</span>
+                    <div className="flex items-center justify-between mb-2">
+                         <div className="flex items-center gap-2">
+                            <BarChart2 size={16} className="text-indigo-400"/>
+                            <span className="text-xs font-bold text-slate-300 uppercase">Training Stats</span>
+                         </div>
+                         {matrices && (
+                            <button 
+                                onClick={handleSaveModel}
+                                className="flex items-center gap-1 text-[10px] bg-slate-800 hover:bg-slate-700 text-emerald-400 px-2 py-1 rounded border border-emerald-500/30 transition-colors"
+                            >
+                                <Save size={10} /> Save Model
+                            </button>
+                         )}
                     </div>
                     {renderStats()}
                </div>
@@ -140,7 +189,7 @@ const TrainingPanel: React.FC<TrainingPanelProps> = ({
                     onClick={() => fileInputRef.current?.click()}
                     className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs py-3 rounded border border-slate-600 transition-colors"
                    >
-                       Retrain New Dataset
+                       Load Different Dataset / Model
                    </button>
                </div>
            </div>
