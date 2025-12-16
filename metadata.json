@@ -1,0 +1,5 @@
+{
+  "name": "Neuro-Symbolic Story Engine",
+  "description": "A research-grade interface demonstrating a hybrid story generation pipeline. It combines Time-Sliced Markov Chains for narrative structure control (Symbolic) with the Gemini API for text generation (Neural) and verification.",
+  "requestFramePermissions": []
+}
