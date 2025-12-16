@@ -35,7 +35,7 @@ export const trainModelFromDataset = async (
 
         // 2. High Performance Mode for RTX 5080
         // We can process more samples since we are using local GPU inference
-        const SAMPLE_LIMIT = 50; 
+        const SAMPLE_LIMIT = 1000; 
         const storiesToProcess = data.slice(0, SAMPLE_LIMIT);
 
         onProgress(10, `Initializing Analysis (${storiesToProcess.length} samples)...`);
