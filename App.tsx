@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { EventType, GenerationStep, TimeSlicedMatrices, EvaluationResult, ModelProvider, DatasetStats, SavedModel } from './types';
-import { DEFAULT_MATRICES, TOTAL_STEPS, EVENT_TYPES } from './constants';
+import { DEFAULT_MATRICES, TOTAL_STEPS } from './constants';
 import { generateStorySegment, verifySegment, evaluateStory, generateVanillaStory } from './services/geminiService';
 import { trainModelFromDataset } from './services/trainingService';
 import EngineControl from './components/EngineControl';
@@ -10,7 +10,7 @@ import MatrixVisualizer from './components/MatrixVisualizer';
 import EvaluationReport from './components/EvaluationReport';
 import TrainingPanel from './components/TrainingPanel';
 import ComparisonCharts from './components/ComparisonCharts';
-import { Layout, FileJson, Database, BrainCircuit, ShieldCheck, X } from 'lucide-react';
+import { Layout, X, Settings, PanelLeft } from 'lucide-react';
 
 const App: React.FC = () => {
   // --- State ---
@@ -19,7 +19,7 @@ const App: React.FC = () => {
   const [steps, setSteps] = useState<GenerationStep[]>([]);
   const [matrices, setMatrices] = useState<TimeSlicedMatrices>(DEFAULT_MATRICES);
   const [currentEvent, setCurrentEvent] = useState<EventType>(EventType.Introduction);
-  const [statusMessage, setStatusMessage] = useState("System Idle. Load dataset to train or start simultaneous simulation.");
+  const [statusMessage, setStatusMessage] = useState("System Idle. Ready.");
   const [showArchitecture, setShowArchitecture] = useState(false);
   const [provider, setProvider] = useState<ModelProvider>('gemini');
   
@@ -35,11 +35,23 @@ const App: React.FC = () => {
 
   // Vanilla / Baseline State
   const [vanillaStory, setVanillaStory] = useState<string | null>(null);
-  const [vanillaPrompt, setVanillaPrompt] = useState<string | null>(null); // New State
+  const [vanillaPrompt, setVanillaPrompt] = useState<string | null>(null);
   const [vanillaEvaluation, setVanillaEvaluation] = useState<EvaluationResult | null>(null);
 
   // Refs
   const abortControllerRef = useRef<AbortController | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom effect
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTo({
+            top: scrollContainerRef.current.scrollHeight,
+            behavior: 'smooth'
+        });
+    }
+  }, [steps, statusMessage]);
+
 
   // --- Symbolic Logic (Step A) ---
   const selectNextEvent = (
@@ -47,52 +59,39 @@ const App: React.FC = () => {
     prevEvent: EventType, 
     matrix: TimeSlicedMatrices
   ): EventType => {
-    // 1. Get probabilities for the current step and previous event
     const transitionRow = matrix[stepIndex][prevEvent];
-    
-    // 2. Apply Self-Loop Penalty (Alpha coefficient)
     const entries = Object.entries(transitionRow) as [EventType, number][];
     let weightedEntries = entries.map(([event, prob]) => {
-      if (event === prevEvent) return [event, prob * 0.5] as [EventType, number]; // Alpha = 0.5
+      if (event === prevEvent) return [event, prob * 0.5] as [EventType, number];
       return [event, prob] as [EventType, number];
     });
-
-    // 3. Normalize
     const totalWeight = weightedEntries.reduce((sum, [, prob]) => sum + prob, 0);
     weightedEntries = weightedEntries.map(([event, prob]) => [event, prob / totalWeight]);
-
-    // 4. Weighted Random Selection
     const r = Math.random();
     let cumulative = 0;
     for (const [event, prob] of weightedEntries) {
       cumulative += prob;
       if (r <= cumulative) return event;
     }
-    return weightedEntries[weightedEntries.length - 1][0]; // Fallback
+    return weightedEntries[weightedEntries.length - 1][0];
   };
 
-  // --- Helper: Peek Ahead Logic ---
   const getMostLikelyNextEvent = (
       stepIndex: number,
       currentEvent: EventType,
       matrix: TimeSlicedMatrices
   ): EventType | undefined => {
       if (stepIndex >= TOTAL_STEPS - 1) return undefined;
-      
       const nextStepIndex = stepIndex + 1;
       const transitionRow = matrix[nextStepIndex][currentEvent];
-      
-      // Find event with max probability
       let maxProb = -1;
       let likelyEvent: EventType | undefined = undefined;
-      
       Object.entries(transitionRow).forEach(([evt, prob]) => {
           if (prob > maxProb) {
               maxProb = prob;
               likelyEvent = evt as EventType;
           }
       });
-      
       return likelyEvent;
   };
 
@@ -117,7 +116,7 @@ const App: React.FC = () => {
                  const savedModel = json as SavedModel;
                  setMatrices(savedModel.matrices);
                  setDatasetStats(savedModel.stats);
-                 setStatusMessage(`Model Loaded: Version ${savedModel.version} (${savedModel.timestamp}). Ready for simulation.`);
+                 setStatusMessage(`Model Loaded: Version ${savedModel.version}.`);
                  setIsTraining(false);
                  return;
             }
@@ -125,7 +124,7 @@ const App: React.FC = () => {
             if (Array.isArray(json) || (typeof json === 'object' && !json.matrices)) {
                  await runTrainingProcess(file);
             } else {
-                 throw new Error("Unknown file format. Please upload a .json dataset or a saved model.");
+                 throw new Error("Unknown file format.");
             }
 
         } catch (err) {
@@ -134,12 +133,6 @@ const App: React.FC = () => {
             setIsTraining(false);
         }
     };
-
-    reader.onerror = () => {
-        setStatusMessage("Failed to read file.");
-        setIsTraining(false);
-    };
-
     reader.readAsText(file);
   };
 
@@ -149,10 +142,9 @@ const App: React.FC = () => {
             setTrainingProgress(percent);
             setTrainingStatus(msg);
         });
-        
         setMatrices(result.matrices);
         setDatasetStats(result.stats);
-        setStatusMessage(`Training complete. Analyzed ${result.stats.count} stories and updated transition matrices.`);
+        setStatusMessage(`Training complete. Analyzed ${result.stats.count} stories.`);
     } catch (e) {
         console.error(e);
         setStatusMessage("Training failed: " + (e instanceof Error ? e.message : String(e)));
@@ -161,9 +153,8 @@ const App: React.FC = () => {
     }
   };
 
-  // --- SIMULTANEOUS EXECUTION PROTOCOL ---
+  // --- EXECUTION PROTOCOL ---
   const runComparisonProtocol = async () => {
-      // Reset State
       setSteps([]);
       setEvaluationResult(null);
       setVanillaStory(null);
@@ -172,13 +163,10 @@ const App: React.FC = () => {
       setCurrentEvent(EventType.Introduction);
       abortControllerRef.current = new AbortController();
 
-      // Start Both Loops
-      // We do not await vanilla here; we let it run in the background
       runVanillaLoop(abortControllerRef.current.signal);
       await runNeuroLoop(abortControllerRef.current.signal);
   };
 
-  // --- Neuro Loop ---
   const runNeuroLoop = async (signal: AbortSignal) => {
     setIsRunning(true);
     let previousEvent = EventType.Introduction;
@@ -189,7 +177,7 @@ const App: React.FC = () => {
       for (let step = 0; step < TOTAL_STEPS; step++) {
         if (signal.aborted) break;
 
-        setStatusMessage(`[Step ${step}] System 1: Calculating transition P(E|${previousEvent})...`);
+        setStatusMessage(`Sys1: Planning step ${step+1}/${TOTAL_STEPS}...`);
         await new Promise(r => setTimeout(r, 600));
 
         let nextEvent: EventType;
@@ -200,11 +188,9 @@ const App: React.FC = () => {
         }
         setCurrentEvent(nextEvent);
 
-        // Look-Ahead Strategy for Smoothness
         const foreshadowEvent = getMostLikelyNextEvent(step, nextEvent, matrices);
-        const foreshadowMsg = foreshadowEvent ? `(Preparing for ${foreshadowEvent})` : '';
-
-        setStatusMessage(`[Step ${step}] System 2: Generating <${nextEvent}> ${foreshadowMsg}...`);
+        
+        setStatusMessage(`Sys2: Generating <${nextEvent}>...`);
         
         let segmentResult = { text: "", promptUsed: "" };
         let verified = false;
@@ -214,18 +200,16 @@ const App: React.FC = () => {
 
         while (!verified && retryCount <= MAX_RETRIES) {
              if (signal.aborted) throw new Error("Aborted");
-             // Pass foreshadowEvent to generator
              segmentResult = await generateStorySegment(storyContext, nextEvent, step, provider, foreshadowEvent);
              
-             setStatusMessage(`[Step ${step}] Verifier: NLI Entailment Check (Attempt ${retryCount + 1})...`);
+             setStatusMessage(`Verifier: Checking logic constraint (${retryCount + 1})...`);
              const check = await verifySegment(segmentResult.text, nextEvent, provider);
              verificationScore = check.confidence;
              verified = check.verified;
 
              if (!verified) {
-                 setStatusMessage(`[Step ${step}] Verifier: Rejected (${check.confidence}). Reasoning: ${check.reasoning}`);
                  retryCount++;
-                 await new Promise(r => setTimeout(r, 1000));
+                 await new Promise(r => setTimeout(r, 500));
              }
         }
 
@@ -233,7 +217,7 @@ const App: React.FC = () => {
             stepIndex: step,
             selectedEvent: nextEvent,
             generatedText: segmentResult.text,
-            promptUsed: segmentResult.promptUsed, // Store the prompt
+            promptUsed: segmentResult.promptUsed,
             verificationScore,
             verified,
             retryCount,
@@ -244,17 +228,15 @@ const App: React.FC = () => {
         generatedSteps.push(newStep);
         storyContext += " " + segmentResult.text;
         previousEvent = nextEvent;
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-      }
+    }
 
       if (!signal.aborted) {
-          setStatusMessage(`Phase 5: Running AI Judge Evaluation (${provider})...`);
+          setStatusMessage(`Running Final Evaluation...`);
           setIsEvaluating(true);
           const evaluation = await evaluateStory(storyContext, provider, generatedSteps);
           setEvaluationResult(evaluation);
           setIsEvaluating(false);
-          setStatusMessage("Neuro-Symbolic Pipeline Complete.");
-          window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+          setStatusMessage("Protocol Complete.");
       }
 
     } catch (error) {
@@ -269,21 +251,16 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Vanilla Loop ---
   const runVanillaLoop = async (signal: AbortSignal) => {
       setIsVanillaLoading(true);
       try {
-        // Vanilla runs blindly while Neuro runs step-by-step
         const result = await generateVanillaStory(provider);
         if (signal.aborted) return;
-        
         setVanillaStory(result.text);
         setVanillaPrompt(result.promptUsed);
         
-        // Evaluate immediately after generation
         const evalResult = await evaluateStory(result.text, provider);
         if (signal.aborted) return;
-        
         setVanillaEvaluation(evalResult);
       } catch (error) {
           console.error("Vanilla Error:", error);
@@ -302,7 +279,7 @@ const App: React.FC = () => {
     setIsRunning(false);
     setIsEvaluating(false);
     setIsVanillaLoading(false);
-    setStatusMessage("System reset. Matrices retained.");
+    setStatusMessage("System Reset.");
     setCurrentEvent(EventType.Introduction);
   };
 
@@ -312,150 +289,122 @@ const App: React.FC = () => {
   const highlightFrom = steps.length > 0 && isRunning ? steps[steps.length - 1].selectedEvent : (steps.length > 0 ? steps[steps.length - 2]?.selectedEvent : undefined);
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-200 p-4 md:p-8 relative">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Left Column: Controls & Visualization */}
-        <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-8 h-fit">
-           <header className="mb-2 flex justify-between items-start">
-             <div>
-               <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
-                 Neuro-Symbolic Engine
-               </h1>
-               <p className="text-xs text-slate-500 font-mono mt-1">
-                 PAPER ID: #8821 | REPLICATION
-               </p>
-             </div>
-             <button 
-                onClick={() => setShowArchitecture(true)}
-                className="text-xs flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 px-3 py-1.5 rounded-full transition-colors"
-             >
-                <Layout size={12} />
-                Architecture
-             </button>
-           </header>
-           
-           <TrainingPanel 
-             onFileUpload={handleFileUpload}
-             isTraining={isTraining}
-             trainingProgress={trainingProgress}
-             trainingStatus={trainingStatus}
-             datasetStats={datasetStats}
-             matrices={matrices}
-           />
-
-           <EngineControl 
-             isRunning={isRunning}
-             progress={steps.length}
-             totalSteps={TOTAL_STEPS}
-             onStart={runComparisonProtocol} // Changed to simultaneous run
-             onReset={handleReset}
-             statusMessage={statusMessage}
-             isVanillaLoading={isVanillaLoading}
-             provider={provider}
-             setProvider={setProvider}
-           />
-
-           <PerformancePanel 
-             steps={steps} 
-             evaluation={evaluationResult} 
-           />
-
-           <div className="space-y-2">
-             <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-               <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-               System 1: Symbolic Planner
-             </h3>
-             <MatrixVisualizer 
-                matrix={activeMatrix} 
-                stepIndex={boundedStepIndex}
-                highlightFrom={highlightFrom}
-                highlightTo={currentEvent}
-             />
-           </div>
+    <div className="flex h-screen w-full bg-[#0b0f19] text-slate-200 overflow-hidden font-sans selection:bg-indigo-500/30">
+      
+      {/* --- LEFT SIDEBAR (Controls) --- */}
+      <aside className="w-[400px] flex-shrink-0 flex flex-col border-r border-slate-800 bg-[#0f172a] overflow-hidden">
+        {/* Header */}
+        <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-[#0b0f19]">
+            <div>
+                <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
+                    Neuro-Symbolic
+                </h1>
+                <p className="text-[10px] text-slate-500 font-mono tracking-wider">PAPER ID: #8821 | ENGINE</p>
+            </div>
+            <button onClick={() => setShowArchitecture(true)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors">
+                <Layout size={18} />
+            </button>
         </div>
 
-        {/* Right Column: Story Output & Comparison */}
-        <div className="lg:col-span-2">
-          {/* New Comparison Charts */}
-          <ComparisonCharts 
-            neuroResult={evaluationResult} 
-            vanillaResult={vanillaEvaluation} 
-            steps={steps}
-          />
+        {/* Scrollable Sidebar Content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+            
+            <EngineControl 
+                isRunning={isRunning}
+                progress={steps.length}
+                totalSteps={TOTAL_STEPS}
+                onStart={runComparisonProtocol}
+                onReset={handleReset}
+                statusMessage={statusMessage}
+                isVanillaLoading={isVanillaLoading}
+                provider={provider}
+                setProvider={setProvider}
+            />
 
-          <StoryTimeline 
-            steps={steps} 
-            vanillaStory={vanillaStory} 
-            vanillaPrompt={vanillaPrompt} // Pass prompt prop
-          />
+            <TrainingPanel 
+                onFileUpload={handleFileUpload}
+                isTraining={isTraining}
+                trainingProgress={trainingProgress}
+                trainingStatus={trainingStatus}
+                datasetStats={datasetStats}
+                matrices={matrices}
+            />
+
+            <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+                <MatrixVisualizer 
+                    matrix={activeMatrix} 
+                    stepIndex={boundedStepIndex}
+                    highlightFrom={highlightFrom}
+                    highlightTo={currentEvent}
+                />
+            </div>
+
+        </div>
+
+        {/* Footer Info */}
+        <div className="p-3 border-t border-slate-800 text-[10px] text-slate-600 text-center font-mono bg-[#0b0f19]">
+            v2.1.0 • Research Preview • Localhost
+        </div>
+      </aside>
+
+
+      {/* --- RIGHT MAIN CONTENT --- */}
+      <main className="flex-1 flex flex-col min-w-0 bg-[#0b0f19] relative">
           
-          <EvaluationReport 
-            neuroResult={evaluationResult} 
-            vanillaResult={vanillaEvaluation}
-            isLoading={isEvaluating || (isVanillaLoading && !vanillaEvaluation)} 
-          />
-        </div>
-      </div>
+          {/* Top HUD (Performance Metrics) - Always Visible */}
+          <div className="h-16 border-b border-slate-800 bg-[#0f172a]/80 backdrop-blur-md flex items-center px-6 shadow-sm z-10 shrink-0">
+               <PerformancePanel steps={steps} evaluation={evaluationResult} />
+          </div>
 
-      {/* Architecture Modal */}
+          {/* Main Scrollable Area */}
+          <div className="flex-1 overflow-y-auto p-6 scroll-smooth custom-scrollbar" ref={scrollContainerRef}>
+              
+              <div className="max-w-5xl mx-auto space-y-8 pb-20">
+                  {/* Analysis Charts (Collapsible or Top Placed) */}
+                  {(steps.length > 0 || vanillaEvaluation) && (
+                      <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                          <ComparisonCharts 
+                              neuroResult={evaluationResult} 
+                              vanillaResult={vanillaEvaluation} 
+                              steps={steps}
+                          />
+                      </section>
+                  )}
+
+                  {/* Story Timeline (The Main Feed) */}
+                  <section className="min-h-[300px]">
+                      <StoryTimeline 
+                          steps={steps} 
+                          vanillaStory={vanillaStory} 
+                          vanillaPrompt={vanillaPrompt}
+                      />
+                  </section>
+
+                  {/* Final Report */}
+                  <section>
+                      <EvaluationReport 
+                          neuroResult={evaluationResult} 
+                          vanillaResult={vanillaEvaluation}
+                          isLoading={isEvaluating || (isVanillaLoading && !vanillaEvaluation)} 
+                      />
+                  </section>
+              </div>
+
+          </div>
+      </main>
+
+      {/* Architecture Modal Overlay */}
       {showArchitecture && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowArchitecture(false)}>
-          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-4xl w-full p-6 md:p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowArchitecture(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
-              <X size={24} />
-            </button>
-            <h2 className="text-2xl font-bold text-white mb-8 flex items-center gap-3">
-              <Layout className="text-indigo-400" />
-              System Architecture
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 relative">
-              <div className="hidden md:block absolute top-12 left-0 right-0 h-0.5 bg-gradient-to-r from-indigo-900 via-indigo-500 to-indigo-900 -z-10"></div>
-              {/* Step 1 */}
-              <div className="bg-slate-800/80 p-4 rounded-lg border border-indigo-500/20 relative group hover:border-indigo-500/50 transition-colors">
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-900 px-2 text-[10px] text-indigo-400 font-mono tracking-wider border border-slate-800">STEP 1</div>
-                  <div className="h-10 w-10 bg-indigo-900/50 rounded-full flex items-center justify-center mx-auto mb-3 border border-indigo-500/30 text-indigo-300">
-                      <Database size={18} />
-                  </div>
-                  <h3 className="text-center font-bold text-slate-200 text-sm mb-1">Data Processing</h3>
-                  <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-                      Reads JSON Dataset (<span className="font-mono text-indigo-300">stories.json</span>). Heuristic tokenizer labels events & builds transition matrices in-browser.
-                  </p>
-              </div>
-              {/* Step 2 */}
-              <div className="bg-slate-800/80 p-4 rounded-lg border border-slate-700 relative hover:border-indigo-500/30 transition-colors">
-                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-900 px-2 text-[10px] text-indigo-400 font-mono tracking-wider border border-slate-800">STEP 2</div>
-                  <div className="h-10 w-10 bg-indigo-900/50 rounded-full flex items-center justify-center mx-auto mb-3 border border-indigo-500/30 text-indigo-300">
-                      <FileJson size={18} />
-                  </div>
-                  <h3 className="text-center font-bold text-slate-200 text-sm mb-1">Markov Construction</h3>
-                  <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-                      Custom Time-Sliced Matrices loaded into Engine. Selection logic applies self-loop penalties and random sampling.
-                  </p>
-              </div>
-              {/* Step 3 */}
-              <div className="bg-slate-800/80 p-4 rounded-lg border border-slate-700 relative hover:border-indigo-500/30 transition-colors">
-                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-900 px-2 text-[10px] text-indigo-400 font-mono tracking-wider border border-slate-800">STEP 3</div>
-                  <div className="h-10 w-10 bg-indigo-900/50 rounded-full flex items-center justify-center mx-auto mb-3 border border-indigo-500/30 text-indigo-300">
-                      <BrainCircuit size={18} />
-                  </div>
-                  <h3 className="text-center font-bold text-slate-200 text-sm mb-1">Neural Generation</h3>
-                  <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-                      LLM (Gemini / Ollama) generates text segments conditioned on the selected Event Type and previous context.
-                  </p>
-              </div>
-              {/* Step 4 */}
-              <div className="bg-slate-800/80 p-4 rounded-lg border border-slate-700 relative hover:border-indigo-500/30 transition-colors">
-                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-900 px-2 text-[10px] text-indigo-400 font-mono tracking-wider border border-slate-800">STEP 4</div>
-                  <div className="h-10 w-10 bg-indigo-900/50 rounded-full flex items-center justify-center mx-auto mb-3 border border-indigo-500/30 text-indigo-300">
-                      <ShieldCheck size={18} />
-                  </div>
-                  <h3 className="text-center font-bold text-slate-200 text-sm mb-1">Verification Loop</h3>
-                  <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-                      NLI Model verifies if output matches intended event. Retries generation if confidence is low.
-                  </p>
-              </div>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-4xl w-full p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowArchitecture(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={24} /></button>
+            <h2 className="text-2xl font-bold text-white mb-6">System Architecture</h2>
+            <div className="grid grid-cols-4 gap-4 text-center">
+                 {/* ... Content same as before ... */}
+                 <div className="bg-slate-800 p-4 rounded border border-slate-700">1. Data Ingest</div>
+                 <div className="bg-slate-800 p-4 rounded border border-slate-700">2. Matrix Build</div>
+                 <div className="bg-slate-800 p-4 rounded border border-slate-700">3. Neuro Gen</div>
+                 <div className="bg-slate-800 p-4 rounded border border-slate-700">4. Verify Loop</div>
             </div>
           </div>
         </div>

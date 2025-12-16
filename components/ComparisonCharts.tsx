@@ -1,6 +1,6 @@
 import React from 'react';
 import { EvaluationResult, GenerationStep, EventType } from '../types';
-import { Activity, Hexagon } from 'lucide-react';
+import { Activity, Hexagon, BarChart3, TrendingUp } from 'lucide-react';
 
 interface ComparisonChartsProps {
   neuroResult: EvaluationResult | null;
@@ -49,8 +49,19 @@ const ComparisonCharts: React.FC<ComparisonChartsProps> = ({ neuroResult, vanill
   const neuroPoly = getPoints(neuroScores);
   const vanillaPoly = getPoints(vanillaScores);
 
-  // --- 2. TENSION ARC LOGIC ---
-  // Map EventTypes to arbitrary "Tension" values (1-10)
+  // --- 2. BAR CHART LOGIC (Event Distribution) ---
+  // Count occurrences of each event type in the generated steps
+  const eventCounts = steps.reduce((acc, step) => {
+      acc[step.selectedEvent] = (acc[step.selectedEvent] || 0) + 1;
+      return acc;
+  }, {} as Record<string, number>);
+
+  // Sort by count descending to show most frequent events at top
+  const sortedEventCounts = Object.entries(eventCounts).sort((a, b) => b[1] - a[1]);
+  const maxCount = Math.max(...Object.values(eventCounts), 1);
+
+  // --- 3. TENSION ARC LOGIC ---
+  // Map EventTypes to arbitrary "Tension" values (1-10) for the line chart
   const getTension = (e: EventType) => {
       switch(e) {
           case EventType.Introduction: return 2;
@@ -66,102 +77,139 @@ const ComparisonCharts: React.FC<ComparisonChartsProps> = ({ neuroResult, vanill
       }
   };
 
-  // Generate points for the line chart
+  // Generate SVG points string for the line chart
   const tensionPoints = steps.map((s, i) => {
-      const x = (i / (steps.length - 1 || 1)) * 300; // Width 300
+      const x = (i / (steps.length - 1 || 1)) * 100; // Use percentage for width coordinate in viewBox
       const y = 100 - (getTension(s.selectedEvent) * 10); // Height 100, inverted Y
-      return `${x},${y}`;
+      return `${x * 3},${y}`; // Scale X to 300 width
   }).join(' ');
 
   if (!neuroResult && steps.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
         
-        {/* Chart 1: Quality Radar */}
-        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg flex flex-col items-center">
-            <h4 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
-                <Hexagon size={16} className="text-purple-400"/>
-                Model Comparison (Quality)
+        {/* Chart 1: Quality Radar (Left - 4 Cols) */}
+        <div className="lg:col-span-4 bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg flex flex-col items-center">
+            <h4 className="text-xs font-bold text-slate-300 mb-4 flex items-center gap-2 self-start uppercase tracking-wider">
+                <Hexagon size={14} className="text-purple-400"/>
+                Metric Radar
             </h4>
-            <div className="relative w-64 h-64">
-                <svg viewBox="0 0 200 200" className="w-full h-full">
+            <div className="relative w-48 h-48 lg:w-56 lg:h-56">
+                <svg viewBox="0 0 200 200" className="w-full h-full drop-shadow-2xl">
                     {/* Background Grid */}
                     {[2, 4, 6, 8, 10].map(r => (
-                        <circle key={r} cx={center} cy={center} r={(r/10)*radius} fill="none" stroke="#334155" strokeWidth="1" />
+                        <circle key={r} cx={center} cy={center} r={(r/10)*radius} fill="none" stroke="#334155" strokeWidth="1" strokeDasharray="2,2"/>
                     ))}
                     {metrics.map((label, i) => {
-                        const { x, y } = getCoordinates(11, i, metrics.length);
+                        const { x, y } = getCoordinates(11.5, i, metrics.length);
                         return (
-                            <text key={label} x={x} y={y} fontSize="8" fill="#94a3b8" textAnchor="middle" dominantBaseline="middle">
+                            <text key={label} x={x} y={y} fontSize="9" fontWeight="600" fill="#94a3b8" textAnchor="middle" dominantBaseline="middle">
                                 {label}
                             </text>
                         );
                     })}
                     
-                    {/* Vanilla Area */}
+                    {/* Vanilla Area (Amber) */}
                     {vanillaResult && (
-                        <polygon points={vanillaPoly} fill="rgba(245, 158, 11, 0.3)" stroke="#f59e0b" strokeWidth="2" />
+                        <polygon points={vanillaPoly} fill="rgba(245, 158, 11, 0.2)" stroke="#f59e0b" strokeWidth="2" />
                     )}
                     
-                    {/* Neuro Area */}
+                    {/* Neuro Area (Indigo) */}
                     {neuroResult && (
-                        <polygon points={neuroPoly} fill="rgba(99, 102, 241, 0.4)" stroke="#6366f1" strokeWidth="2" />
+                        <polygon points={neuroPoly} fill="rgba(99, 102, 241, 0.3)" stroke="#6366f1" strokeWidth="2" />
                     )}
                 </svg>
             </div>
-            <div className="flex gap-4 mt-2 text-xs">
-                <div className="flex items-center gap-1">
-                    <span className="w-3 h-3 bg-indigo-500/40 border border-indigo-500 rounded-sm"></span>
+            <div className="flex gap-4 mt-6 text-[10px] font-mono">
+                <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span>
                     <span className="text-indigo-200">Neuro-Symbolic</span>
                 </div>
                 {vanillaResult && (
-                    <div className="flex items-center gap-1">
-                        <span className="w-3 h-3 bg-amber-500/30 border border-amber-500 rounded-sm"></span>
+                    <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 bg-amber-500 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.6)]"></span>
                         <span className="text-amber-200">Vanilla Baseline</span>
                     </div>
                 )}
             </div>
         </div>
 
-        {/* Chart 2: Structural Arc */}
-        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
-            <h4 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
-                <Activity size={16} className="text-cyan-400"/>
-                Generated Narrative Arc (Tension)
+        {/* Chart 2: Event Type Distribution (Middle - 4 Cols) */}
+        <div className="lg:col-span-4 bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg flex flex-col">
+            <h4 className="text-xs font-bold text-slate-300 mb-4 flex items-center gap-2 uppercase tracking-wider">
+                <BarChart3 size={14} className="text-emerald-400"/>
+                Event Frequency
             </h4>
-            <div className="w-full h-48 flex items-end justify-center relative bg-slate-900/50 rounded border border-slate-700/50 p-2">
+            <div className="flex-1 flex flex-col justify-center gap-2.5 overflow-y-auto max-h-[240px] custom-scrollbar pr-2">
+                {sortedEventCounts.length > 0 ? (
+                    sortedEventCounts.map(([type, count]) => (
+                        <div key={type} className="w-full">
+                            <div className="flex justify-between text-[10px] text-slate-400 mb-1 uppercase tracking-wide font-medium">
+                                <span>{type.replace(/_/g, ' ')}</span>
+                                <span className="font-mono text-emerald-400 font-bold">{count}</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-emerald-500 rounded-full transition-all duration-700 ease-out"
+                                    style={{ width: `${(count / maxCount) * 100}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                    ))
+                ) : (
+                    <div className="text-xs text-slate-500 italic text-center py-10">
+                        Waiting for data...
+                    </div>
+                )}
+            </div>
+        </div>
+
+        {/* Chart 3: Structural Arc (Right - 4 Cols) */}
+        <div className="lg:col-span-4 bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg flex flex-col">
+             <h4 className="text-xs font-bold text-slate-300 mb-4 flex items-center gap-2 uppercase tracking-wider">
+                <TrendingUp size={14} className="text-cyan-400"/>
+                Tension Arc
+            </h4>
+            <div className="flex-1 w-full flex items-end justify-center relative bg-gradient-to-t from-slate-900/80 to-slate-900/20 rounded-lg border border-slate-700/50 p-2 overflow-hidden">
                 {steps.length > 1 ? (
                     <svg viewBox="0 0 300 100" className="w-full h-full overflow-visible">
+                        <defs>
+                            <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.4" />
+                                <stop offset="100%" stopColor="#22d3ee" stopOpacity="1" />
+                            </linearGradient>
+                        </defs>
                         {/* Reference Lines */}
-                        <line x1="0" y1="20" x2="300" y2="20" stroke="#1e293b" strokeDasharray="4" />
-                        <line x1="0" y1="50" x2="300" y2="50" stroke="#1e293b" strokeDasharray="4" />
-                        <line x1="0" y1="80" x2="300" y2="80" stroke="#1e293b" strokeDasharray="4" />
+                        <line x1="0" y1="20" x2="300" y2="20" stroke="#1e293b" strokeWidth="0.5" strokeDasharray="4" />
+                        <line x1="0" y1="50" x2="300" y2="50" stroke="#1e293b" strokeWidth="0.5" strokeDasharray="4" />
+                        <line x1="0" y1="80" x2="300" y2="80" stroke="#1e293b" strokeWidth="0.5" strokeDasharray="4" />
                         
                         {/* The Line */}
-                        <polyline points={tensionPoints} fill="none" stroke="#22d3ee" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <polyline points={tensionPoints} fill="none" stroke="url(#lineGradient)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_4px_rgba(34,211,238,0.5)]" />
                         
                         {/* Points */}
                         {steps.map((s, i) => {
                              const x = (i / (steps.length - 1)) * 300;
                              const y = 100 - (getTension(s.selectedEvent) * 10);
                              return (
-                                 <circle key={i} cx={x} cy={y} r="3" fill="#0891b2" stroke="#fff" strokeWidth="1" className="hover:r-4 transition-all">
-                                     <title>{s.selectedEvent}</title>
+                                 <circle key={i} cx={x} cy={y} r="2.5" fill="#0b0f19" stroke="#22d3ee" strokeWidth="1.5" className="hover:scale-150 transition-transform cursor-help">
+                                     <title>{s.selectedEvent} (Step {i})</title>
                                  </circle>
                              );
                         })}
                     </svg>
                 ) : (
-                    <div className="text-xs text-slate-500 italic self-center">
-                        Waiting for structure generation...
+                    <div className="flex flex-col items-center justify-center h-full text-slate-600 gap-2">
+                        <Activity size={24} className="opacity-20" />
+                        <span className="text-[10px] italic">Generating Structure...</span>
                     </div>
                 )}
             </div>
-            <div className="flex justify-between mt-2 text-[10px] text-slate-500 font-mono">
+             <div className="flex justify-between mt-3 text-[9px] text-slate-500 font-mono border-t border-slate-700/50 pt-2">
                 <span>SETUP</span>
                 <span>CONFLICT</span>
-                <span>RESOLUTION</span>
+                <span>RES</span>
             </div>
         </div>
     </div>
