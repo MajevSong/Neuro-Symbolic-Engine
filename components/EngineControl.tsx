@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, RotateCcw, Activity, Power, Sparkles, Cloud, Server } from 'lucide-react';
+import { Play, RotateCcw, Activity, Power, Sparkles, Cloud, Server, Split } from 'lucide-react';
 import { ModelProvider } from '../types';
 
 interface EngineControlProps {
@@ -8,7 +8,6 @@ interface EngineControlProps {
   totalSteps: number;
   onStart: () => void;
   onReset: () => void;
-  onRunVanilla: () => void;
   statusMessage: string;
   isVanillaLoading: boolean;
   provider: ModelProvider;
@@ -21,7 +20,6 @@ const EngineControl: React.FC<EngineControlProps> = ({
   totalSteps,
   onStart,
   onReset,
-  onRunVanilla,
   statusMessage,
   isVanillaLoading,
   provider,
@@ -41,7 +39,7 @@ const EngineControl: React.FC<EngineControlProps> = ({
             Control Unit
           </h2>
           <p className="text-slate-400 text-xs mt-1 font-mono">
-            STATUS: {isBusy ? 'ACTIVE' : (isComplete ? 'COMPLETED' : 'STANDBY')}
+            STATUS: {isBusy ? 'RUNNING COMPARISON' : (isComplete ? 'COMPLETED' : 'STANDBY')}
           </p>
         </div>
         
@@ -86,24 +84,21 @@ const EngineControl: React.FC<EngineControlProps> = ({
             disabled={isBusy}
             className={`w-full group relative flex flex-col items-center justify-center gap-3 bg-gradient-to-r from-indigo-900 to-slate-900 border border-indigo-500/50 hover:border-indigo-400 text-indigo-100 py-6 rounded-xl transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-            <div className="p-3 bg-indigo-600 rounded-full group-hover:scale-110 transition-transform shadow-lg shadow-indigo-500/50">
-                <Power size={24} className="text-white" />
+            <div className="flex gap-4">
+                <div className="p-3 bg-indigo-600 rounded-full group-hover:scale-110 transition-transform shadow-lg shadow-indigo-500/50">
+                    <Power size={24} className="text-white" />
+                </div>
             </div>
+            
             <div className="text-center">
-                <span className="block text-lg font-bold">Initialize Story Engine</span>
-                <span className="text-xs text-indigo-300/70">
-                    {provider === 'ollama' ? 'Using Local Mistral Small 24B' : 'Using Gemini 2.5 Flash'}
+                <span className="block text-lg font-bold">Run Simultaneous Comparison</span>
+                <span className="text-xs text-indigo-300/70 block mt-1">
+                    Triggers Neuro-Symbolic Engine (Left) AND Vanilla Baseline (Right)
+                </span>
+                <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 mt-2 inline-block">
+                    Provider: {provider === 'ollama' ? 'Local Mistral Small 24B' : 'Gemini 2.5 Flash'}
                 </span>
             </div>
-            </button>
-            
-            <button
-                onClick={onRunVanilla}
-                disabled={isBusy}
-                className={`w-full flex items-center justify-center gap-2 bg-slate-700/50 border border-slate-600 hover:bg-slate-700 text-slate-300 py-3 rounded-lg transition-colors text-sm font-medium ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-                <Sparkles size={16} className="text-amber-400" />
-                Run Vanilla Baseline Comparison
             </button>
         </div>
       ) : (
@@ -113,20 +108,21 @@ const EngineControl: React.FC<EngineControlProps> = ({
                 <div className="flex mb-2 items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
                         <span className="text-slate-300 font-semibold inline-block py-1 px-2 uppercase rounded-full bg-slate-700">
-                            {isVanillaLoading ? "Baseline Generation" : "Neuro-Symbolic Generation"}
+                            Research Protocol
                         </span>
-                        <span className="text-[10px] text-slate-500 border border-slate-700 px-1.5 py-0.5 rounded uppercase">
-                            {provider}
-                        </span>
+                        {isVanillaLoading && (
+                             <span className="text-amber-400 flex items-center gap-1 animate-pulse">
+                                 <Sparkles size={10} /> Baseline Generating...
+                             </span>
+                        )}
                     </div>
-                    {!isVanillaLoading && (
-                        <span className="text-right text-indigo-300 font-bold font-mono">
-                            {Math.round(progressPercent)}%
-                        </span>
-                    )}
+                    
+                    <span className="text-right text-indigo-300 font-bold font-mono">
+                        {Math.round(progressPercent)}%
+                    </span>
                 </div>
                 <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-slate-900 border border-slate-700">
-                    <div style={{ width: isVanillaLoading ? '100%' : `${progressPercent}%` }} className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-500 ease-out ${isVanillaLoading ? 'bg-amber-500 animate-pulse' : 'bg-indigo-500'}`}></div>
+                    <div style={{ width: `${progressPercent}%` }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-500 transition-all duration-300 ease-out"></div>
                 </div>
             </div>
             

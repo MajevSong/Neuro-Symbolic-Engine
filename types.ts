@@ -19,6 +19,7 @@ export interface GenerationStep {
   verified: boolean;
   retryCount: number;
   timestamp: number;
+  promptUsed: string; // NEW: Store the prompt for transparency
 }
 
 // A 9x9 matrix representing transition probabilities between EventTypes

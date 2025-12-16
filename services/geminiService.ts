@@ -76,45 +76,61 @@ export const generateStorySegment = async (
   previousContext: string,
   targetEvent: EventType,
   stepIndex: number,
-  provider: ModelProvider
-): Promise<string> => {
-  // Enhanced Prompt for Mistral Small 24B
-  // 24B parameters allow for better adherence to "Show, Don't Tell" and tonal instructions compared to smaller models.
-  const prompt = `
-    Role: Master Storyteller (System 2).
-    Model Capabilities: High-Fidelity Creative Writing (Mistral 24B).
-    
-    Current Narrative Context:
-    ${previousContext ? `"${previousContext}"` : "[The story begins here]"}
-    
-    Creative Task: 
-    Write the next immediate segment of the story (approx. 3-5 sentences).
-    
-    Structural Requirement:
-    - Step: ${stepIndex}/15
-    - Narrative Event Type: **${targetEvent}**
-    
-    Style Guidelines:
-    - Focus on sensory details and character psychology.
-    - Avoid meta-commentary or repeating the event label.
-    - Maintain continuity with the previous context.
-    - If "Dialogue", ensure it reveals character conflict or advances the plot.
-    
-    Output: Return ONLY the story text.
-  `;
+  provider: ModelProvider,
+  foreshadowingEvent?: EventType // Look-ahead context
+): Promise<{ text: string, promptUsed: string }> => {
+  
+  // Extract the last few sentences to help the model connect the flow
+  const sentences = previousContext.split(/(?<=[.!?])\s+/);
+  const lastFewSentences = sentences.slice(-3).join(" ");
+  const contextSnippet = previousContext.length > 2000 ? "..." + previousContext.slice(-2000) : previousContext;
 
-  if (provider === 'ollama') {
-      return await callOllama(prompt, 0.85);
+  // Foreshadowing logic
+  let foreshadowInstruction = "";
+  if (foreshadowingEvent) {
+      foreshadowInstruction = `5. **FORESHADOWING**: The NEXT segment after this will be a "${foreshadowingEvent}". End this segment in a way that naturally leads into that tone/action.`;
   }
 
-  // Gemini Fallback
-  const client = getGeminiClient();
-  const response = await client.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-    config: { temperature: 0.85 }
-  });
-  return response.text?.trim() || "";
+  // Enhanced Prompt for better Flow and Diversity
+  // TARGET LENGTH: ~80 words * 15 steps = 1200 words total.
+  const prompt = `
+    Role: Expert Novelist (System 2).
+    Task: Write the next continuous segment of the story.
+    
+    Current Narrative Arc Position: Step ${stepIndex}/15
+    Target Structural Event: **${targetEvent}**
+    
+    Previous Context (Summary):
+    "${contextSnippet}"
+    
+    IMMEDIATE CONTEXT (Connect to this):
+    "${lastFewSentences}"
+    
+    Instructions:
+    1. **FLOW**: Begin your segment by directly reacting to or continuing the action/thought from the IMMEDIATE CONTEXT. Do not start a new unrelated scene unless the Event Type specifically requires a scene change.
+    2. **SHOW, DON'T TELL**: Use sensory details suitable for a "${targetEvent}".
+    3. **DIVERSITY**: Do not repeat phrases or sentence structures used in the immediate context. Avoid starting sentences with "Suddenly" or "Then".
+    4. **LENGTH**: Write approximately 75-90 words. (This is strict. Do not write too little).
+    ${foreshadowInstruction}
+    
+    Output: Return ONLY the new story text.
+  `;
+
+  let text = "";
+  if (provider === 'ollama') {
+      text = await callOllama(prompt, 0.85); // Slightly higher temp for creativity
+  } else {
+    // Gemini Fallback
+    const client = getGeminiClient();
+    const response = await client.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: { temperature: 0.85 }
+    });
+    text = response.text?.trim() || "";
+  }
+
+  return { text, promptUsed: prompt };
 };
 
 // Step C: Verification (Phase 4 - NLI Simulation)
@@ -197,11 +213,12 @@ export const verifySegment = async (
 };
 
 // Vanilla Generation for Comparison
-export const generateVanillaStory = async (provider: ModelProvider): Promise<string> => {
+export const generateVanillaStory = async (provider: ModelProvider): Promise<{ text: string, promptUsed: string }> => {
+  // TARGET LENGTH: Matched to Neuro (~1200 words)
   const prompt = `
-    Task: Write a complete, high-quality short story (approx. 500-700 words).
+    Task: Write a COMPLETE, LONG-FORM short story (Target Length: Approximately 1100-1300 words).
     
-    Narrative Arc:
+    Narrative Arc Requirements:
     1. Introduction (Setup)
     2. Inciting Incident (Problem)
     3. Rising Action (Complications)
@@ -209,22 +226,26 @@ export const generateVanillaStory = async (provider: ModelProvider): Promise<str
     5. Resolution (Conclusion)
     
     Instructions:
-    - Write it as a single coherent narrative without section headers.
-    - Focus on "Show, Don't Tell".
-    - Create engaging characters and tension.
+    - **LENGTH**: It is critical that you write a full, detailed story. Do not summarize events.
+    - **DEPTH**: Fully develop scenes with dialogue, sensory description, and internal monologue.
+    - **PACING**: Ensure the story does not rush to the end. Spend time in the 'Rising Action' phase.
+    - **FORMAT**: Return the story as plain text without section headers (e.g. do not write "**Introduction**").
   `;
 
+  let text = "";
   if (provider === 'ollama') {
-      return await callOllama(prompt, 0.9);
+      text = await callOllama(prompt, 0.9);
+  } else {
+    const client = getGeminiClient();
+    const response = await client.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: { temperature: 0.9 }
+    });
+    text = response.text?.trim() || "";
   }
 
-  const client = getGeminiClient();
-  const response = await client.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-    config: { temperature: 0.9 }
-  });
-  return response.text?.trim() || "";
+  return { text, promptUsed: prompt };
 };
 
 // --- METRIC CALCULATION HELPERS ---
@@ -290,6 +311,7 @@ export const evaluateStory = async (fullStory: string, provider: ModelProvider, 
       1. Global Coherence: Do the events connect logically?
       2. Narrative Arc: Is there a clear beginning, middle, and end?
       3. Creativity: Is the prose engaging and original?
+      4. Flow: Does the story move naturally between paragraphs? (Penalty for jagged transitions).
       
       Return a JSON evaluation.
     `;

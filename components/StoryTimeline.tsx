@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { GenerationStep, EventType } from '../types';
-import { CheckCircle, AlertTriangle, RefreshCw, Layers, Sparkles, Download, Copy } from 'lucide-react';
+import { CheckCircle, AlertTriangle, RefreshCw, Layers, Sparkles, Download, Copy, FileText, Code, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface StoryTimelineProps {
   steps: GenerationStep[];
   vanillaStory: string | null;
+  vanillaPrompt?: string | null;
 }
 
 const getEventColor = (type: EventType) => {
@@ -22,8 +23,14 @@ const getEventColor = (type: EventType) => {
   }
 };
 
-const StoryTimeline: React.FC<StoryTimelineProps> = ({ steps, vanillaStory }) => {
+const StoryTimeline: React.FC<StoryTimelineProps> = ({ steps, vanillaStory, vanillaPrompt }) => {
   const [activeTab, setActiveTab] = useState<'neuro' | 'vanilla'>('neuro');
+  // Track open prompt states for individual Neuro steps
+  const [openPrompts, setOpenPrompts] = useState<Record<number, boolean>>({});
+
+  const togglePrompt = (index: number) => {
+      setOpenPrompts(prev => ({ ...prev, [index]: !prev[index] }));
+  };
 
   useEffect(() => {
     if (!vanillaStory && activeTab === 'vanilla') {
@@ -40,50 +47,62 @@ const StoryTimeline: React.FC<StoryTimelineProps> = ({ steps, vanillaStory }) =>
       if (part === 'conflict') { start = 4; end = 11; } // Steps 4-10 (Development)
       if (part === 'resolution') { start = 11; end = 15; } // Steps 11-14 (Conclusion)
 
-      const text = steps.slice(start, end).map(s => s.generatedText).join('\n\n');
+      // Allow partial downloads of available steps
+      const actualEnd = Math.min(end, steps.length);
+      if (actualEnd <= start) return;
+
+      const text = steps.slice(start, actualEnd).map(s => s.generatedText).join('\n\n');
       
       const blob = new Blob([text], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `story_${part}.txt`;
+      a.download = `story_${part}_${new Date().toISOString().split('T')[0]}.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
   };
 
+  const getStepCount = (start: number, end: number) => {
+      if (steps.length <= start) return 0;
+      return Math.min(steps.length, end) - start;
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-        <h3 className="text-lg font-bold text-slate-100">Narrative Output</h3>
+        <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+            Narrative Output
+            {steps.length > 0 && <span className="text-xs font-normal text-slate-500">({steps.length}/15 steps)</span>}
+        </h3>
         
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center flex-wrap">
             {steps.length > 0 && activeTab === 'neuro' && (
                 <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700 gap-1 mr-2">
                    <button 
                      onClick={() => handleDownloadPart('introduction')} 
-                     disabled={steps.length < 4}
-                     className="px-2 py-1 text-[10px] text-slate-300 hover:text-white hover:bg-slate-700 rounded transition flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                     disabled={getStepCount(0, 4) === 0}
+                     className="px-2 py-1 text-[10px] text-slate-300 hover:text-white hover:bg-slate-700 rounded transition flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed border border-transparent hover:border-slate-600"
                      title="Download Setup Phase (Steps 0-3)"
                    >
-                       <Download size={10} /> Intro
+                       <FileText size={10} /> Intro ({getStepCount(0, 4)}/4)
                    </button>
                    <button 
                      onClick={() => handleDownloadPart('conflict')} 
-                     disabled={steps.length < 11}
-                     className="px-2 py-1 text-[10px] text-slate-300 hover:text-white hover:bg-slate-700 rounded transition flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                     disabled={getStepCount(4, 11) === 0}
+                     className="px-2 py-1 text-[10px] text-slate-300 hover:text-white hover:bg-slate-700 rounded transition flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed border border-transparent hover:border-slate-600"
                      title="Download Development Phase (Steps 4-10)"
                    >
-                       <Download size={10} /> Conflict
+                       <FileText size={10} /> Conflict ({getStepCount(4, 11)}/7)
                    </button>
                    <button 
                      onClick={() => handleDownloadPart('resolution')} 
-                     disabled={steps.length < 15}
-                     className="px-2 py-1 text-[10px] text-slate-300 hover:text-white hover:bg-slate-700 rounded transition flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                     disabled={getStepCount(11, 15) === 0}
+                     className="px-2 py-1 text-[10px] text-slate-300 hover:text-white hover:bg-slate-700 rounded transition flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed border border-transparent hover:border-slate-600"
                      title="Download Resolution Phase (Steps 11-14)"
                    >
-                       <Download size={10} /> Resolution
+                       <FileText size={10} /> Resolution ({getStepCount(11, 15)}/4)
                    </button>
                 </div>
             )}
@@ -146,9 +165,26 @@ const StoryTimeline: React.FC<StoryTimelineProps> = ({ steps, vanillaStory }) =>
                     </div>
                 </div>
                 
-                <p className="text-sm md:text-base leading-relaxed text-slate-100 font-serif">
+                <p className="text-sm md:text-base leading-relaxed text-slate-100 font-serif mb-3">
                     {step.generatedText}
                 </p>
+
+                {/* Prompt Toggle */}
+                <div className="border-t border-slate-700/50 pt-2">
+                    <button 
+                        onClick={() => togglePrompt(index)}
+                        className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-indigo-300 transition-colors"
+                    >
+                        <Code size={10} />
+                        {openPrompts[index] ? 'Hide' : 'Show'} System Prompt
+                        {openPrompts[index] ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                    </button>
+                    {openPrompts[index] && (
+                        <div className="mt-2 bg-black/40 p-2 rounded text-[10px] font-mono text-slate-400 whitespace-pre-wrap border border-slate-700/50">
+                            {step.promptUsed || "No prompt record available."}
+                        </div>
+                    )}
+                </div>
                 </div>
             </div>
             ))}
@@ -163,6 +199,19 @@ const StoryTimeline: React.FC<StoryTimelineProps> = ({ steps, vanillaStory }) =>
 
       {activeTab === 'vanilla' && vanillaStory && (
         <div className="bg-slate-800/50 p-6 rounded-lg border border-amber-500/20 shadow-lg">
+            {/* Vanilla Prompt Display */}
+            {vanillaPrompt && (
+                <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-2 text-amber-500/80 text-xs font-bold uppercase tracking-wider">
+                        <Code size={12} />
+                        Standard Prompt (Global Context)
+                    </div>
+                    <div className="bg-black/40 p-3 rounded text-[11px] font-mono text-slate-400 whitespace-pre-wrap border border-slate-700/50">
+                        {vanillaPrompt}
+                    </div>
+                </div>
+            )}
+
             <h4 className="text-amber-400 text-sm font-bold uppercase tracking-wider mb-4 border-b border-slate-700 pb-2">
                 Vanilla LLM Output (Gemini 2.5 Flash)
             </h4>
