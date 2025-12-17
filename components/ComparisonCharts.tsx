@@ -51,14 +51,14 @@ const ComparisonCharts: React.FC<ComparisonChartsProps> = ({ neuroResult, vanill
 
   // --- 2. BAR CHART LOGIC (Event Distribution) ---
   // Count occurrences of each event type in the generated steps
-  const eventCounts = steps.reduce((acc, step) => {
+  const eventCounts: Record<string, number> = steps.reduce((acc, step) => {
       acc[step.selectedEvent] = (acc[step.selectedEvent] || 0) + 1;
       return acc;
   }, {} as Record<string, number>);
 
   // Sort by count descending to show most frequent events at top
-  const sortedEventCounts = Object.entries(eventCounts).sort((a, b) => b[1] - a[1]);
-  const maxCount = Math.max(...Object.values(eventCounts), 1);
+  const sortedEventCounts = (Object.entries(eventCounts) as [string, number][]).sort((a, b) => b[1] - a[1]);
+  const maxCount = Math.max(...(Object.values(eventCounts) as number[]), 1);
 
   // --- 3. TENSION ARC LOGIC ---
   // Map EventTypes to arbitrary "Tension" values (1-10) for the line chart

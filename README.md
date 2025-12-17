@@ -1,4 +1,4 @@
-# Neuro-Symbolic Story Engine
+# Neuro-Symbolic Story Engine (Research Preview)
 
 ![Status](https://img.shields.io/badge/Status-Research_Preview-indigo)
 ![Tech](https://img.shields.io/badge/Stack-React_|_Gemini_Flash_|_Ollama-black)
