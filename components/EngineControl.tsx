@@ -1,11 +1,13 @@
 import React from 'react';
-import { Play, RotateCcw, Activity, Power, Sparkles, Cloud, Server, Split } from 'lucide-react';
+import { Play, RotateCcw, Activity, Power, Sparkles, Cloud, Server, Sliders } from 'lucide-react';
 import { ModelProvider } from '../types';
 
 interface EngineControlProps {
   isRunning: boolean;
   progress: number;
   totalSteps: number;
+  storyLength: number;
+  setStoryLength: (len: number) => void;
   onStart: () => void;
   onReset: () => void;
   statusMessage: string;
@@ -18,6 +20,8 @@ const EngineControl: React.FC<EngineControlProps> = ({
   isRunning,
   progress,
   totalSteps,
+  storyLength,
+  setStoryLength,
   onStart,
   onReset,
   statusMessage,
@@ -58,22 +62,45 @@ const EngineControl: React.FC<EngineControlProps> = ({
 
       {/* Model Provider Selector */}
       {!isBusy && progress === 0 && (
-        <div className="mb-6 p-1 bg-slate-900 rounded-lg flex border border-slate-700">
-           <button 
-             onClick={() => setProvider('gemini')}
-             className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold uppercase tracking-wider rounded transition-all ${provider === 'gemini' ? 'bg-indigo-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
-           >
-             <Cloud size={14} />
-             Gemini Flash
-           </button>
-           <button 
-             onClick={() => setProvider('ollama')}
-             className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold uppercase tracking-wider rounded transition-all ${provider === 'ollama' ? 'bg-indigo-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
-           >
-             <Server size={14} />
-             Local Ollama
-           </button>
-        </div>
+        <>
+            <div className="mb-4 p-1 bg-slate-900 rounded-lg flex border border-slate-700">
+                <button 
+                    onClick={() => setProvider('gemini')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold uppercase tracking-wider rounded transition-all ${provider === 'gemini' ? 'bg-indigo-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                    <Cloud size={14} />
+                    Gemini Flash
+                </button>
+                <button 
+                    onClick={() => setProvider('ollama')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold uppercase tracking-wider rounded transition-all ${provider === 'ollama' ? 'bg-indigo-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                    <Server size={14} />
+                    Local Ollama
+                </button>
+            </div>
+            
+            {/* Dynamic Length Slider */}
+            <div className="mb-6 bg-slate-900/50 p-3 rounded border border-slate-700/50">
+                <div className="flex justify-between text-xs text-slate-400 mb-2 font-mono">
+                    <span className="flex items-center gap-1"><Sliders size={12}/> STORY LENGTH</span>
+                    <span className="text-indigo-400 font-bold">{storyLength} Steps</span>
+                </div>
+                <input 
+                    type="range" 
+                    min="5" 
+                    max="50" 
+                    step="1"
+                    value={storyLength} 
+                    onChange={(e) => setStoryLength(parseInt(e.target.value))}
+                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                />
+                <div className="flex justify-between text-[9px] text-slate-600 mt-1 font-mono">
+                    <span>Short (5)</span>
+                    <span>Novel (50)</span>
+                </div>
+            </div>
+        </>
       )}
 
       {/* Main Action Area */}
@@ -93,7 +120,7 @@ const EngineControl: React.FC<EngineControlProps> = ({
             <div className="text-center">
                 <span className="block text-lg font-bold">Run Simultaneous Comparison</span>
                 <span className="text-xs text-indigo-300/70 block mt-1">
-                    Triggers Neuro-Symbolic Engine (Left) AND Vanilla Baseline (Right)
+                    Triggers Neuro-Symbolic Engine ({storyLength} Steps) vs Vanilla
                 </span>
                 <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 mt-2 inline-block">
                     Provider: {provider === 'ollama' ? 'Local Mistral Small 24B' : 'Gemini 2.5 Flash'}

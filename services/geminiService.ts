@@ -1,9 +1,10 @@
+
 import { GoogleGenAI, Type } from '@google/genai';
 import { EventType, EvaluationResult, ModelProvider, GenerationStep } from '../types';
 
 // Standard localhost is usually preferred by browsers for CORS whitelist matching
 const OLLAMA_HOST = 'http://localhost:11434';
-// Using Mistral Small 24B for both Logic AND Creative Generation (Superior to Qwen 14B for narrative)
+// Using Mistral Small 24B for both Logic AND Creative Generation
 const OLLAMA_MODEL = 'mistral-small:24b'; 
 
 // --- HELPER: Gemini Client ---
@@ -18,7 +19,6 @@ export const callOllama = async (prompt: string, temperature: number, jsonSchema
     let finalPrompt = prompt;
     let format = undefined;
 
-    // For Ollama, we append the schema instruction to the prompt if strict JSON is needed
     if (jsonSchema) {
         finalPrompt += `\n\nIMPORTANT: You must respond strictly with a valid JSON object matching this schema:\n${JSON.stringify(jsonSchema, null, 2)}\n\nDo not include markdown formatting like \`\`\`json. Just return the raw JSON.`;
         format = "json";
@@ -38,7 +38,7 @@ export const callOllama = async (prompt: string, temperature: number, jsonSchema
                 format: format,
                 options: {
                     temperature: temperature,
-                    num_ctx: 8192 // Mistral Small supports larger context
+                    num_ctx: 8192 
                 }
             })
         });
@@ -54,19 +54,15 @@ export const callOllama = async (prompt: string, temperature: number, jsonSchema
         
         const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
         let extraWarning = "";
-        
         if (isHttps) {
             extraWarning = "\n\n⚠️ MIXED CONTENT WARNING: You appear to be running this app on HTTPS (e.g., Cloud IDE). Browsers BLOCK requests to local HTTP servers (Ollama). You must run this app locally on http://localhost.";
         }
-
-        // Detailed error for the user
         throw new Error(
             `Ollama Connection Failed.${extraWarning}\n\n` +
             "TROUBLESHOOTING:\n" +
             "1. **Taskbar Icon**: If you see the Ollama icon in your taskbar, Right Click -> QUIT it.\n" +
             "2. **Terminal**: Run command: `OLLAMA_ORIGINS=\"*\" ollama serve`\n" +
-            "3. **Model**: Ensure you ran `ollama pull mistral-small:24b`\n" +
-            "4. **Extensions**: Disable AdBlockers for localhost."
+            "3. **Model**: Ensure you ran `ollama pull mistral-small:24b`"
         );
     }
 };
@@ -80,25 +76,45 @@ export const generateStorySegment = async (
   foreshadowingEvent?: EventType // Look-ahead context
 ): Promise<{ text: string, promptUsed: string }> => {
   
-  // Extract the last few sentences to help the model connect the flow
   const sentences = previousContext.split(/(?<=[.!?])\s+/);
   const lastFewSentences = sentences.slice(-3).join(" ");
-  const contextSnippet = previousContext.length > 2000 ? "..." + previousContext.slice(-2000) : previousContext;
+  const contextSnippet = previousContext.length > 2500 ? "..." + previousContext.slice(-2500) : previousContext;
 
-  // Foreshadowing logic
   let foreshadowInstruction = "";
   if (foreshadowingEvent) {
-      foreshadowInstruction = `5. **FORESHADOWING**: The NEXT segment after this will be a "${foreshadowingEvent}". End this segment in a way that naturally leads into that tone/action.`;
+      foreshadowInstruction = `**TRANSITION**: The NEXT segment will be a "${foreshadowingEvent}". Guide the narrative towards that.`;
   }
 
-  // Enhanced Prompt for better Flow and Diversity
-  // TARGET LENGTH: ~80 words * 15 steps = 1200 words total.
+  const narrativeInstructions = `
+    1. **ACTION OVER ATMOSPHERE**: Do NOT write pure description. The Protagonist must DO something or SAY something.
+    2. **AVOID REPETITION**: If the previous text mentioned "shadows", "whispers", or "cold", DO NOT use those words again. Find a new angle.
+    3. **PACE**: Move the story forward. Do not linger.
+    4. **CONNECT**: Seamlessly continue from the IMMEDIATE CONTEXT.
+    5. **LENGTH**: Write approximately 75-90 words.
+  `;
+
+  const eventSpecificInstructions = {
+      [EventType.Introduction]: "Establish the protagonist's GOAL immediately. Who are they and what do they want?",
+      [EventType.Inciting_Incident]: "Disrupt the protagonist's world. This must be an active EVENT, not just a realization.",
+      [EventType.Rising_Action]: "The protagonist tries to solve the problem but faces a specific OBSTACLE.",
+      [EventType.Conflict]: "Direct confrontation. Two forces must collide (Internal or External). High energy.",
+      [EventType.Revelation]: "PLOT TWIST. The protagonist realizes something shocking that changes their understanding of the plot. A moment of discovery.",
+      [EventType.Climax]: "The point of no return. The protagonist makes a critical CHOICE.",
+      [EventType.Falling_Action]: "Immediate aftermath. The adrenaline crash.",
+      [EventType.Resolution]: "Loose ends are tied up. The immediate problem is solved.",
+      [EventType.Story_End]: "THE END. Provide thematic closure. Leave the reader with a final lingering thought. Do not start a new plot.",
+      [EventType.Dialogue]: "Characters speaking. Use subtext. Advance the plot through what is said (or not said).",
+      [EventType.Description]: "Brief sensory detail that reveals character state. DO NOT halt the plot for this.",
+  };
+
   const prompt = `
     Role: Expert Novelist (System 2).
     Task: Write the next continuous segment of the story.
     
     Current Narrative Arc Position: Step ${stepIndex}/15
     Target Structural Event: **${targetEvent}**
+    
+    Specific Event Goal: ${eventSpecificInstructions[targetEvent] || "Advance the plot."}
     
     Previous Context (Summary):
     "${contextSnippet}"
@@ -107,10 +123,7 @@ export const generateStorySegment = async (
     "${lastFewSentences}"
     
     Instructions:
-    1. **FLOW**: Begin your segment by directly reacting to or continuing the action/thought from the IMMEDIATE CONTEXT. Do not start a new unrelated scene unless the Event Type specifically requires a scene change.
-    2. **SHOW, DON'T TELL**: Use sensory details suitable for a "${targetEvent}".
-    3. **DIVERSITY**: Do not repeat phrases or sentence structures used in the immediate context. Avoid starting sentences with "Suddenly" or "Then".
-    4. **LENGTH**: Write approximately 75-90 words. (This is strict. Do not write too little).
+    ${narrativeInstructions}
     ${foreshadowInstruction}
     
     Output: Return ONLY the new story text.
@@ -118,9 +131,8 @@ export const generateStorySegment = async (
 
   let text = "";
   if (provider === 'ollama') {
-      text = await callOllama(prompt, 0.85); // Slightly higher temp for creativity
+      text = await callOllama(prompt, 0.85); 
   } else {
-    // Gemini Fallback
     const client = getGeminiClient();
     const response = await client.models.generateContent({
         model: "gemini-2.5-flash",
@@ -160,15 +172,17 @@ export const verifySegment = async (
     The segment functions as a "**${intendedEvent}**".
     
     Definitions for Verification:
-    - Introduction: Establishes setting/characters.
-    - Inciting_Incident: Disrupts the status quo.
-    - Rising_Action: Escalates tension, complications arise.
+    - Introduction: Establishes setting/characters AND GOAL.
+    - Inciting_Incident: Disrupts the status quo with an EVENT.
+    - Rising_Action: Escalates tension via OBSTACLES.
     - Conflict: Active struggle or disagreement.
+    - Revelation: A discovery, realization, or plot twist.
     - Climax: The turning point or highest tension.
     - Falling_Action: Consequences of the climax.
-    - Resolution: Conclusion, settling of events.
-    - Dialogue: Characters speaking to one another.
-    - Description: Sensory world-building or internal monologue.
+    - Resolution: Immediate settling of events.
+    - Story_End: Final thematic closure/The End.
+    - Dialogue: Characters speaking.
+    - Description: Sensory world-building.
     
     Instructions:
     Evaluate if the Premise structurally fulfills the Hypothesis.
@@ -197,7 +211,6 @@ export const verifySegment = async (
         jsonString = response.text || "{}";
     }
     
-    // Sanitize JSON string if needed (sometimes local models add markdown blocks despite instructions)
     const cleanJson = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
     const json = JSON.parse(cleanJson);
     
@@ -214,7 +227,6 @@ export const verifySegment = async (
 
 // Vanilla Generation for Comparison
 export const generateVanillaStory = async (provider: ModelProvider): Promise<{ text: string, promptUsed: string }> => {
-  // TARGET LENGTH: Matched to Neuro (~1200 words)
   const prompt = `
     Task: Write a COMPLETE, LONG-FORM short story (Target Length: Approximately 1100-1300 words).
     
@@ -229,7 +241,7 @@ export const generateVanillaStory = async (provider: ModelProvider): Promise<{ t
     - **LENGTH**: It is critical that you write a full, detailed story. Do not summarize events.
     - **DEPTH**: Fully develop scenes with dialogue, sensory description, and internal monologue.
     - **PACING**: Ensure the story does not rush to the end. Spend time in the 'Rising Action' phase.
-    - **FORMAT**: Return the story as plain text without section headers (e.g. do not write "**Introduction**").
+    - **FORMAT**: Return the story as plain text without section headers.
   `;
 
   let text = "";
@@ -252,16 +264,11 @@ export const generateVanillaStory = async (provider: ModelProvider): Promise<{ t
 
 const calculateCSR = (steps: GenerationStep[]): number => {
     if (steps.length === 0) return 0;
-    // Updated Logic: CSR is the percentage of steps that required 0 retries (Passed First Try)
     const passedFirstTry = steps.filter(s => s.retryCount === 0).length;
     return (passedFirstTry / steps.length) * 100;
 };
 
 export const calculateSelfBleuProxy = (text: string): { selfBleu: number, uniqueNGrams: number } => {
-    // A simplified simulation of Self-BLEU for the browser environment
-    // We calculate the ratio of repeated 3-grams to unique 3-grams
-    // Lower score is better (less repetitive)
-    
     const words = text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 0);
     if (words.length < 3) return { selfBleu: 0, uniqueNGrams: words.length };
 
@@ -277,8 +284,6 @@ export const calculateSelfBleuProxy = (text: string): { selfBleu: number, unique
 
     const uniqueCount = ngrams.size;
     const repeatedCount = totalNgrams - uniqueCount;
-    
-    // Normalize to 0-1 scale where 1.0 means highly repetitive (bad diversity)
     const repetitionRate = totalNgrams > 0 ? repeatedCount / totalNgrams : 0;
     
     return {
@@ -287,8 +292,6 @@ export const calculateSelfBleuProxy = (text: string): { selfBleu: number, unique
     };
 };
 
-
-// Phase 5: AI Judge Evaluation
 export const evaluateStory = async (fullStory: string, provider: ModelProvider, steps?: GenerationStep[]): Promise<EvaluationResult> => {
     const schemaDefinition = {
         type: Type.OBJECT,
@@ -296,7 +299,7 @@ export const evaluateStory = async (fullStory: string, provider: ModelProvider, 
             coherenceScore: { type: Type.NUMBER, description: "Score 1-10 for global coherence" },
             creativityScore: { type: Type.NUMBER, description: "Score 1-10 for creativity/novelty" },
             flowScore: { type: Type.NUMBER, description: "Score 1-10 for pacing and structure" },
-            structuralAdherence: { type: Type.NUMBER, description: "Score 0-100 representing how well the story follows a standard narrative arc (Intro->Climax->Resolution)." },
+            structuralAdherence: { type: Type.NUMBER, description: "Score 0-100 representing how well the story follows a standard narrative arc." },
             critique: { type: Type.STRING, description: "A paragraph critiquing the story's strengths and weaknesses." }
         },
         required: ["coherenceScore", "creativityScore", "flowScore", "structuralAdherence", "critique"]
@@ -312,7 +315,7 @@ export const evaluateStory = async (fullStory: string, provider: ModelProvider, 
       1. Global Coherence: Do the events connect logically?
       2. Narrative Arc: Is there a clear beginning, middle, and end?
       3. Creativity: Is the prose engaging and original?
-      4. Flow: Does the story move naturally between paragraphs? (Penalty for jagged transitions).
+      4. Flow: Does the story move naturally between paragraphs? 
       5. **Structural Adherence**: Does the story clearly demonstrate a setup, inciting incident, rising action, climax, and resolution? (0-100%).
       
       Return a JSON evaluation.
@@ -340,19 +343,15 @@ export const evaluateStory = async (fullStory: string, provider: ModelProvider, 
         const cleanJson = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
         const json = JSON.parse(cleanJson);
         
-        // Calculate Research Metrics
         const { selfBleu, uniqueNGrams } = calculateSelfBleuProxy(fullStory);
         const totalWords = fullStory.split(/\s+/).length;
 
         let metrics;
         
         if (steps) {
-            // Neuro: Calculate CSR mathematically from step verification data
             const csr = calculateCSR(steps);
             metrics = { csr, selfBleu, uniqueNGrams, totalWords };
         } else {
-            // Vanilla: Use the AI Judge's "Structural Adherence" score as a proxy for CSR
-            // This allows comparison on the same chart.
             metrics = { csr: json.structuralAdherence || 0, selfBleu, uniqueNGrams, totalWords };
         }
 

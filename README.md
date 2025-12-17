@@ -5,38 +5,40 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 > **Paper ID #8821 Implementation**  
-> A hybrid AI architecture combining **Time-Sliced Markov Chains (System 1)** with **Large Language Models (System 2)** to solve the "Long-Term Coherence" problem in automated storytelling.
+> A hybrid AI architecture combining **Sequence Mining (Structure Learning)** and **Large Language Models (Generative)** to solve the "Long-Term Coherence" problem in automated storytelling.
 
 ![Dashboard Preview](https://via.placeholder.com/1200x600/0f172a/6366f1?text=Neuro-Symbolic+Engine+Dashboard)
 
 ## 🧠 Abstract
 
-Large Language Models (LLMs) often suffer from "context drift" and structural degradation in long-form generation. This project implements a **Neuro-Symbolic** approach where:
-1.  **Symbolic Planner (System 1):** A discrete mathematical model (Markov Chain) enforces narrative structure (e.g., *Inciting Incident* $\rightarrow$ *Rising Action*).
-2.  **Neural Generator (System 2):** An LLM (Gemini 2.5 Flash or Mistral Small) writes the prose, constrained by the planner.
+Large Language Models (LLMs) often suffer from "context drift" and structural degradation in long-form generation. This project implements a **Neuro-Symbolic** approach that first **mines narrative archetypes** from a dataset and then uses them to constrain generation.
+
+The architecture consists of two systems:
+1.  **System 1 (Symbolic Planner):** Uses **Sequence Mining** to extract "Golden Paths" (Archetypes) from data and **Markov Chains** for probabilistic state tracking.
+2.  **System 2 (Neural Generator):** An LLM (Gemini 2.5 Flash or Mistral Small) writes the prose, strictly constrained by System 1's structural blueprint.
 3.  **Verifier Loop:** A simulated NLI (Natural Language Inference) module rejects outputs that do not match the symbolic plan.
 
 ## ✨ Key Features
 
+*   **Narrative Archetype Mining:** Analyzes raw story datasets to discover repeating structural patterns (e.g., *"Twisted Thriller Arc"* vs. *"Classic Hero Arc"*).
+*   **Dual-Mode Control:**
+    *   **Probabilistic Mode:** Generates unique structures using Time-Sliced Markov Chains.
+    *   **Archetype Mode:** Forces the engine to follow a specific, mined "Golden Path" for maximum structural coherence.
 *   **Dual-Pipeline Comparison:** Run the Neuro-Symbolic engine alongside a standard "Vanilla" LLM to visualize improvements in real-time.
-*   **Matrix Visualizer:** Watch the Symbolic Planner weigh probabilities ($P(E_{t+1}|E_t)$) dynamically as the story progresses.
+*   **Matrix Visualizer:** Watch the Symbolic Planner weigh probabilities ($P(E_{t+1}|E_t)$) versus the enforced Archetype path.
 *   **Performance HUD:** Real-time metrics including **CSR (Constraint Satisfaction Rate)**, **Self-BLEU (Diversity)**, and **Vocabulary Richness**.
-*   **Local & Cloud Inference:**
-    *   ⚡ **Cloud:** Google Gemini 2.5 Flash (Fast, High Quality).
-    *   🔒 **Local:** Ollama (Mistral-Small 24B) support for privacy and offline research.
-*   **Training Module:** Upload custom datasets (`.json`) to train the Markov Matrices on specific genres.
 
 ## 🛠️ Architecture
 
 ```mermaid
 graph LR
-    A[Dataset] -->|Tokenize & Classify| B(Markov Matrices)
-    B -->|Step t| C{Symbolic Planner}
-    C -->|Target Event| D[LLM Generator]
-    D -->|Text Segment| E{Logic Verifier}
-    E -->|Pass| F[Story Context]
-    E -->|Fail| D
-    F -->|Context| B
+    A[Raw Dataset] -->|Sequence Mining| B(Discovered Archetypes)
+    A -->|Probability Analysis| C(Markov Matrices)
+    B & C -->|Plan Selection| D{Symbolic Planner}
+    D -->|Target Event| E[LLM Generator]
+    E -->|Text Segment| F{Logic Verifier}
+    F -->|Pass| G[Story Context]
+    F -->|Fail| E
 ```
 
 ## 🚀 Getting Started

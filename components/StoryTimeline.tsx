@@ -14,9 +14,11 @@ const getEventColor = (type: EventType) => {
     case EventType.Inciting_Incident: return 'border-l-indigo-500 bg-indigo-500/5 text-indigo-200';
     case EventType.Rising_Action: return 'border-l-pink-500 bg-pink-500/5 text-pink-200';
     case EventType.Conflict: return 'border-l-red-500 bg-red-500/5 text-red-200';
+    case EventType.Revelation: return 'border-l-violet-500 bg-violet-500/10 text-violet-200'; // NEW: Plot Twist color
     case EventType.Climax: return 'border-l-orange-500 bg-orange-500/5 text-orange-200';
     case EventType.Falling_Action: return 'border-l-yellow-500 bg-yellow-500/5 text-yellow-200';
     case EventType.Resolution: return 'border-l-emerald-500 bg-emerald-500/5 text-emerald-200';
+    case EventType.Story_End: return 'border-l-slate-200 bg-slate-100/10 text-white font-bold'; // NEW: The End color
     case EventType.Dialogue: return 'border-l-purple-500 bg-purple-500/5 text-purple-200';
     case EventType.Description: return 'border-l-slate-400 bg-slate-500/5 text-slate-200';
     default: return 'border-l-gray-500 bg-gray-500/5 text-gray-200';

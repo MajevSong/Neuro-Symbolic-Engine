@@ -1,20 +1,72 @@
-import { EventType, TimeSlicedMatrices, TransitionMatrix } from './types';
+import { EventType, TrajectoryModel, TransitionMatrix, ConstraintConfig } from './types';
 
-export const TOTAL_STEPS = 15;
 export const EVENT_TYPES = Object.values(EventType);
+export const TRAJECTORY_BINS = 20; // High resolution analysis
 
-// Helper to create a normalized row with defaults for 9 events
+// --- NARRATIVE CONSTRAINTS (The "Memory" Module) ---
+export const GLOBAL_CONSTRAINTS: Record<EventType, ConstraintConfig> = {
+    [EventType.Introduction]: { 
+        maxOccurrences: 1, 
+        cooldown: 0 
+    },
+    [EventType.Inciting_Incident]: { 
+        maxOccurrences: 1, 
+        minStepProgress: 0.05 
+    }, 
+    [EventType.Rising_Action]: { 
+        cooldown: 1,
+        requiresEvent: EventType.Inciting_Incident 
+    }, 
+    [EventType.Conflict]: { 
+        cooldown: 0,
+        requiresEvent: EventType.Rising_Action 
+    },
+    [EventType.Revelation]: { 
+        maxOccurrences: 1, 
+        minStepProgress: 0.4, // Plot twists shouldn't happen too early
+        requiresEvent: EventType.Rising_Action
+    },
+    [EventType.Climax]: { 
+        maxOccurrences: 1, 
+        minStepProgress: 0.6,
+        requiresEvent: EventType.Conflict 
+    }, 
+    [EventType.Falling_Action]: { 
+        minStepProgress: 0.7,
+        requiresEvent: EventType.Climax 
+    },
+    [EventType.Resolution]: { 
+        maxOccurrences: 1, 
+        minStepProgress: 0.8,
+        requiresEvent: EventType.Climax 
+    },
+    [EventType.Story_End]: {
+        maxOccurrences: 1,
+        minStepProgress: 0.9, // Must be at the very end
+        requiresEvent: EventType.Resolution // Logic: Resolve first, then End.
+    },
+    [EventType.Dialogue]: { 
+        cooldown: 0 
+    },
+    [EventType.Description]: { 
+        cooldown: 2 
+    }, 
+};
+
+// Helper to create a normalized row
 const createRow = (weights: Partial<Record<EventType, number>>): Record<EventType, number> => {
   const defaults: Record<EventType, number> = {
-    [EventType.Introduction]: 0.00, // Minimize jumping back to start by default
+    [EventType.Introduction]: 0.01, 
     [EventType.Inciting_Incident]: 0.01,
     [EventType.Rising_Action]: 0.01,
     [EventType.Conflict]: 0.01,
+    [EventType.Revelation]: 0.01,
     [EventType.Climax]: 0.01,
     [EventType.Falling_Action]: 0.01,
     [EventType.Resolution]: 0.01,
+    [EventType.Story_End]: 0.01,
     [EventType.Dialogue]: 0.01,
-    [EventType.Description]: 0.01,
+    [EventType.Description]: 0.01, 
   };
   
   const merged = { ...defaults, ...weights };
@@ -27,52 +79,31 @@ const createRow = (weights: Partial<Record<EventType, number>>): Record<EventTyp
   return normalized;
 };
 
-// --- SIMULATION MATRICES (Based on Research Plan Phase 2) ---
-
-// Phase 1: Setup (Steps 0-3)
-// Logic: Strongly force forward motion. Prevent loops back to Introduction.
-const setupMatrix: TransitionMatrix = {
-  [EventType.Introduction]: createRow({ [EventType.Description]: 5, [EventType.Inciting_Incident]: 3, [EventType.Dialogue]: 2 }),
-  [EventType.Inciting_Incident]: createRow({ [EventType.Rising_Action]: 7, [EventType.Conflict]: 2, [EventType.Description]: 1 }),
-  [EventType.Rising_Action]: createRow({ [EventType.Conflict]: 6, [EventType.Description]: 2, [EventType.Dialogue]: 2 }),
-  [EventType.Conflict]: createRow({ [EventType.Rising_Action]: 4, [EventType.Dialogue]: 4 }),
-  [EventType.Climax]: createRow({ [EventType.Falling_Action]: 8 }), // Unlikely in setup, but if happens, move on
-  [EventType.Falling_Action]: createRow({ [EventType.Resolution]: 8 }),
-  [EventType.Resolution]: createRow({ [EventType.Introduction]: 0.1, [EventType.Inciting_Incident]: 5 }), // If resolved too early, restart conflict
-  [EventType.Dialogue]: createRow({ [EventType.Inciting_Incident]: 4, [EventType.Description]: 4 }),
-  [EventType.Description]: createRow({ [EventType.Inciting_Incident]: 5, [EventType.Rising_Action]: 3 }),
+// Default fallback matrix (Generic)
+const GENERIC_MATRIX: TransitionMatrix = {
+    [EventType.Introduction]: createRow({ [EventType.Inciting_Incident]: 0.5, [EventType.Description]: 0.4, [EventType.Dialogue]: 0.1 }),
+    [EventType.Inciting_Incident]: createRow({ [EventType.Rising_Action]: 0.7, [EventType.Conflict]: 0.3 }),
+    [EventType.Rising_Action]: createRow({ [EventType.Conflict]: 0.5, [EventType.Dialogue]: 0.3, [EventType.Revelation]: 0.2 }),
+    [EventType.Conflict]: createRow({ [EventType.Climax]: 0.3, [EventType.Rising_Action]: 0.4, [EventType.Revelation]: 0.3 }),
+    [EventType.Revelation]: createRow({ [EventType.Conflict]: 0.5, [EventType.Climax]: 0.5 }), // Twists usually lead to conflict or climax
+    [EventType.Climax]: createRow({ [EventType.Falling_Action]: 0.9, [EventType.Resolution]: 0.1 }),
+    [EventType.Falling_Action]: createRow({ [EventType.Resolution]: 0.9, [EventType.Story_End]: 0.1 }),
+    [EventType.Resolution]: createRow({ [EventType.Story_End]: 0.9, [EventType.Dialogue]: 0.1 }),
+    [EventType.Story_End]: createRow({ [EventType.Story_End]: 1.0 }), // Absorbing state
+    [EventType.Dialogue]: createRow({ [EventType.Conflict]: 0.3, [EventType.Rising_Action]: 0.3, [EventType.Revelation]: 0.1 }),
+    [EventType.Description]: createRow({ [EventType.Inciting_Incident]: 0.3, [EventType.Dialogue]: 0.3 }),
 };
 
-// Phase 2: Development (Steps 4-10)
-// Logic: Loop between Rising Action, Conflict, and Dialogue. Avoid early Resolution.
-const developmentMatrix: TransitionMatrix = {
-  [EventType.Introduction]: createRow({ [EventType.Rising_Action]: 8 }), // Correction if we somehow got here
-  [EventType.Inciting_Incident]: createRow({ [EventType.Rising_Action]: 6, [EventType.Conflict]: 4 }),
-  [EventType.Rising_Action]: createRow({ [EventType.Conflict]: 5, [EventType.Dialogue]: 3, [EventType.Climax]: 1 }),
-  [EventType.Conflict]: createRow({ [EventType.Rising_Action]: 3, [EventType.Dialogue]: 3, [EventType.Climax]: 2 }),
-  [EventType.Climax]: createRow({ [EventType.Falling_Action]: 5, [EventType.Resolution]: 1 }), 
-  [EventType.Falling_Action]: createRow({ [EventType.Resolution]: 1, [EventType.Conflict]: 6 }), // Force back to conflict if too early
-  [EventType.Resolution]: createRow({ [EventType.Conflict]: 8 }), // False resolution, go back
-  [EventType.Dialogue]: createRow({ [EventType.Conflict]: 5, [EventType.Rising_Action]: 4 }),
-  [EventType.Description]: createRow({ [EventType.Rising_Action]: 4, [EventType.Conflict]: 4 }),
-};
+// Default Trajectory is just 20 copies of generic (until trained)
+export const DEFAULT_TRAJECTORY: TrajectoryModel = Array(TRAJECTORY_BINS).fill(GENERIC_MATRIX);
 
-// Phase 3: Conclusion (Steps 11-14)
-// Logic: Funnel everything towards Climax -> Falling Action -> Resolution.
-const resolutionMatrix: TransitionMatrix = {
-  [EventType.Introduction]: createRow({ [EventType.Resolution]: 1 }),
-  [EventType.Inciting_Incident]: createRow({ [EventType.Conflict]: 2, [EventType.Climax]: 6 }),
-  [EventType.Rising_Action]: createRow({ [EventType.Climax]: 8, [EventType.Conflict]: 2 }),
-  [EventType.Conflict]: createRow({ [EventType.Climax]: 9, [EventType.Rising_Action]: 1 }),
-  [EventType.Climax]: createRow({ [EventType.Falling_Action]: 8, [EventType.Resolution]: 2 }),
-  [EventType.Falling_Action]: createRow({ [EventType.Resolution]: 9, [EventType.Dialogue]: 1 }),
-  [EventType.Resolution]: createRow({ [EventType.Resolution]: 6, [EventType.Description]: 2, [EventType.Dialogue]: 1 }), // Fade out
-  [EventType.Dialogue]: createRow({ [EventType.Resolution]: 6, [EventType.Falling_Action]: 4 }),
-  [EventType.Description]: createRow({ [EventType.Resolution]: 7, [EventType.Falling_Action]: 3 }),
+export const getMatrixForStep = (
+    currentStepIndex: number, 
+    totalSteps: number, 
+    trajectory: TrajectoryModel
+): TransitionMatrix => {
+    if (totalSteps <= 0) return trajectory[0];
+    const progress = Math.min(0.99, Math.max(0, currentStepIndex / totalSteps));
+    const binIndex = Math.floor(progress * TRAJECTORY_BINS);
+    return trajectory[binIndex] || trajectory[0];
 };
-
-export const DEFAULT_MATRICES: TimeSlicedMatrices = Array.from({ length: TOTAL_STEPS }, (_, i) => {
-  if (i < 4) return setupMatrix;
-  if (i < 11) return developmentMatrix;
-  return resolutionMatrix;
-});

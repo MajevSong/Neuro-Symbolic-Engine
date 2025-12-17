@@ -1,83 +1,78 @@
 # Neuro-Symbolic Story Engine: Technical Workflow & Methodology
 
-This document outlines the end-to-end workflow of the Neuro-Symbolic Story Engine. The system implements a hybrid AI architecture designed to improve narrative coherence, structural adherence, and output diversity compared to standard LLM generation.
+This document outlines the end-to-end workflow of the Neuro-Symbolic Story Engine. The system implements a hybrid AI architecture designed to extract structural knowledge from datasets and strictly enforce that structure during LLM generation.
 
 ---
 
-## 1. Initialization & Data Processing (System 1 Setup)
+## Phase 1: Knowledge Discovery (Sequence Mining)
 
-Before generation begins, the Symbolic Planner (System 1) must be initialized. This is done via the **Training Panel**.
+Before generation begins, the system must learn the "Shape of Stories" from the provided dataset (`stories.json`). This process is known as **Narrative Archetype Discovery**.
 
-### A. Input Data (`stories.json`)
-The system accepts a dataset of existing narratives.
-*   **Format:** JSON array of objects containing text.
-*   **Preprocessing:** The engine uses a local LLM (Mistral-Small via Ollama) or Gemini to tokenize sentences and classify them into 9 distinct **Event Types** (e.g., `Inciting_Incident`, `Conflict`, `Climax`).
+### A. Segmentation & Classification
+The engine samples stories from the dataset and processes them through the following pipeline:
+1.  **Segmentation:** Each story is split into $N$ discrete temporal chunks (Target: 15 steps).
+2.  **Event Classification:** A lightweight LLM classifies each chunk into one of 11 **Event Types** (e.g., `Inciting_Incident`, `Conflict`, `Climax`).
+3.  **Path Extraction:** The system maps the full trajectory of every story (e.g., Story A: `Intro` $\to$ `Conflict` $\to$ `Climax`...).
 
-### B. Matrix Construction (Markov Chains)
-Once classified, the system builds **Time-Sliced Transition Matrices ($T_0$ to $T_{14}$)**.
-*   **Logic:** It calculates the probability $P(E_{t+1} | E_t)$ for every step $t$ in the story.
-*   **Smoothing:** Laplace smoothing is applied to ensure no transition is mathematically impossible (probability 0), allowing for creative flexibility.
-*   **Result:** A set of 9x9 matrices that dictate the "Rhythm" of a story at any given phase (Setup, Development, Resolution).
+### B. Archetype Clustering & Matrix Construction
+1.  **Frequency Analysis:** The system aggregates identical paths to find **"Discovered Paths" (Archetypes)**.
+    *   *Example:* If 40% of stories follow the pattern `Intro` $\to$ `Conflict` $\to$ `Resolution`, this becomes a selectable "Golden Path."
+2.  **Matrix Construction:** Concurrently, it builds **Time-Sliced Transition Matrices ($T_0$ to $T_{14}$)**.
+    *   *Logic:* It calculates the probability $P(E_{t+1} | E_t)$ for every step $t$.
+    *   *Result:* A probabilistic model that knows, for instance, that a "Climax" at Step 2 is highly unlikely ($P \approx 0.01$), but at Step 12 is highly likely ($P \approx 0.8$).
 
 ---
 
-## 2. Simultaneous Execution Protocol (The Experiment)
+## Phase 2: Symbolic Planning (System 1 Configuration)
 
-When the user clicks **"Run Simultaneous Comparison"**, two parallel processes are launched to ensure a fair, apples-to-apples comparison.
+The Symbolic Planner (System 1) determines the blueprint of the story before a single word of prose is written. It operates in two modes:
 
-### Track A: The Neuro-Symbolic Pipeline (Proposed Method)
-This pipeline uses a **Step-by-Step** generation approach controlled by the Symbolic Planner.
+### Mode A: Archetype Mode (Deterministic)
+*   **Input:** The user selects a mined "Golden Path" (e.g., "Twisted Thriller Arc").
+*   **Behavior:** The planner **overrides** probabilistic calculations and strictly enforces the mined sequence.
+*   **Use Case:** Replicating a specific, proven narrative structure found in the dataset.
 
-1.  **State Selection:**
-    *   System 1 looks at the Matrix for the current step.
-    *   It selects the next `Target Event` based on weighted probabilities.
-    *   *Constraint:* Self-loop penalties are applied to prevent the model from getting stuck in one state (e.g., repeating "Description" 5 times).
+### Mode B: Dynamic Markov Mode (Probabilistic)
+*   **Input:** No specific path selected.
+*   **Behavior:** The planner uses the Transition Matrices to calculate the next step dynamically ($E_{t+1}$) based on the current state ($E_t$) and history constraints.
+*   **Use Case:** Generating novel, previously unseen structures that still adhere to the general "rhythm" of the training data.
 
-2.  **Look-Ahead Foreshadowing (New):**
-    *   The system peeks ahead to Step $t+1$ to find the most likely future event.
-    *   This "Foreshadowing Event" is passed to the LLM to smoothen transitions.
+---
 
+## Phase 3: Neuro-Symbolic Execution (System 2 Generation)
+
+When the protocol runs, the **Neuro-Symbolic Pipeline** executes step-by-step:
+
+1.  **State Selection:** System 1 dictates the `Target Event` (e.g., "Climax") based on the active Mode (A or B).
+2.  **Look-Ahead Foreshadowing:** System 1 checks Step $t+1$ to provide "Foreshadowing Context" to the generator.
 3.  **Micro-Generation (System 2):**
-    *   **Prompt:** A specific, context-aware prompt is sent to the LLM.
-    *   **Transparency:** The exact prompt includes the `Target Event`, the `Immediate Context` (last 3 sentences), and the `Foreshadowing Instruction`.
-    *   **Output:** A short segment (~80 words).
-
+    *   **Prompt:** A structured prompt is sent to the LLM.
+    *   **Context Injection:** Includes the `Target Event`, `Immediate Previous Text`, and `Foreshadowing Instruction`.
+    *   **Output:** A short segment (~75-90 words).
 4.  **Verification Loop (NLI):**
     *   An automated **Natural Language Inference (NLI)** check runs.
     *   *Premise:* The generated text.
     *   *Hypothesis:* "This text functions as a [Target Event]".
-    *   If confidence < 0.5, the text is rejected, and the LLM is forced to retry (up to 2 times).
-
-### Track B: The Vanilla Baseline (Control Group)
-This pipeline represents the standard usage of LLMs (e.g., ChatGPT, Gemini).
-
-1.  **Global Prompting:**
-    *   A single, massive prompt is sent to the model.
-    *   **Instruction:** "Write a complete 1200-word story with a clear arc."
-    *   **Blind Generation:** The model does not receive step-by-step guidance or feedback during generation.
-    *   **Transparency:** The full prompt is visible in the UI for comparison.
+    *   **Pass:** The segment is appended to the story.
+    *   **Fail:** The segment is rejected, and the LLM regenerates with higher penalty parameters.
 
 ---
 
-## 3. Evaluation Metrics
+## Phase 4: Evaluation & Metrics
 
-Upon completion, both stories are evaluated by an **AI Critic (System 2 as Judge)** and deterministic algorithms.
+The output is compared against a **Vanilla Baseline** (a standard LLM generating the story in one shot).
 
-| Metric | Definition | Goal |
+| Metric | Definition | Research Goal |
 | :--- | :--- | :--- |
-| **CSR (Constraint Satisfaction Rate)** | The percentage of steps where the generated text satisfied the verifyer on the *first try*. | **Higher is better.** Measures how well the generator follows instructions without correction. |
-| **Self-BLEU** | A diversity metric measuring n-gram overlap within the text. | **Lower is better.** High scores (e.g., >0.5) indicate repetitive loops or limited vocabulary. |
-| **Vocabulary (Unique N-Grams)** | The count of unique 3-word combinations. | **Higher is better.** Indicates lexical richness. |
-| **Coherence Score (1-10)** | Subjective evaluation of logical consistency. | **Higher is better.** |
-| **Narrative Arc (Tension)** | Visualized as a line chart. | We look for a standard dramatic curve (Rise -> Climax -> Fall). |
+| **CSR (Constraint Satisfaction Rate)** | % of steps where System 2 satisfied System 1's plan on the *first try*. | Demonstrate high controllability. |
+| **Self-BLEU** | Diversity metric measuring n-gram overlap. | Demonstrate that structural constraints do not harm (and often help) vocabulary diversity. |
+| **Structure Adherence** | A visual comparison of the Tension Arc. | Show that Neuro-Symbolic stories follow a dramatic curve, while Vanilla stories often "meander" or rush to the end. |
 
 ---
 
-## 4. User Interface & Transparency
+## UI Transparency for Researchers
 
 To ensure scientific validity, the interface provides:
-
-*   **Matrix Visualizer:** See the internal probabilities of the Symbolic Planner in real-time.
-*   **Prompt Reveal:** Click "Show System Prompt" on any Neuro-Symbolic step to see exactly what was sent to the AI.
-*   **Split View:** Compare the "Chunked" Neuro story against the "Monolith" Vanilla story side-by-side.
-*   **JSON Export:** Download the full experiment data (Prompts, Outputs, Metrics) for inclusion in the research paper.
+*   **Matrix Visualizer:** Displays both the *Probabilistic Heatmap* (Markov) and the *Forced Path* (Archetype) simultaneously.
+*   **Prompt Inspection:** "Glass Box" design allows researchers to view the exact prompts sent to the LLM for every single step.
+*   **Data Export:** One-click download of the JSON logs containing all prompts, outputs, and NLI verification scores for the appendix.
