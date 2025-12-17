@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GenerationStep, EventType } from '../types';
-import { CheckCircle, AlertTriangle, RefreshCw, Layers, Sparkles, FileText, Code, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, RefreshCw, Layers, Sparkles, FileText, Code, ChevronDown, ChevronUp, Loader2, Copy, Download, FileJson } from 'lucide-react';
 
 interface StoryTimelineProps {
   steps: GenerationStep[];
@@ -26,9 +26,52 @@ const getEventColor = (type: EventType) => {
 const StoryTimeline: React.FC<StoryTimelineProps> = ({ steps, vanillaStory, vanillaPrompt }) => {
   // Track open prompt states for individual Neuro steps
   const [openPrompts, setOpenPrompts] = useState<Record<number, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const togglePrompt = (index: number) => {
       setOpenPrompts(prev => ({ ...prev, [index]: !prev[index] }));
+  };
+
+  const copyToClipboard = (text: string, id: string) => {
+      navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleDownloadAppendix = () => {
+      let content = `# Research Appendix: Prompt Engineering Logs\n`;
+      content += `Date: ${new Date().toISOString()}\n`;
+      content += `Paper ID: #8821\n\n`;
+      
+      content += `==================================================================\n`;
+      content += `PART 1: VANILLA BASELINE PROMPT (Control Group)\n`;
+      content += `==================================================================\n\n`;
+      content += `The following prompt was sent to the model to generate the entire story in one pass:\n\n`;
+      content += `\`\`\`text\n${vanillaPrompt || "Not available"}\n\`\`\`\n\n`;
+
+      content += `==================================================================\n`;
+      content += `PART 2: NEURO-SYMBOLIC STEP-BY-STEP PROMPTS (Experimental Group)\n`;
+      content += `==================================================================\n\n`;
+      content += `The Neuro-Symbolic engine generates the story in 15 discrete steps. Below are the specific prompts constructed for each step, including the dynamic context injection.\n\n`;
+
+      steps.forEach((step) => {
+          content += `### Step ${step.stepIndex}: ${step.selectedEvent}\n`;
+          content += `**Target Event:** ${step.selectedEvent}\n`;
+          content += `**Verification Score:** ${(step.verificationScore * 100).toFixed(0)}%\n\n`;
+          content += `**Prompt Used:**\n\`\`\`text\n${step.promptUsed}\n\`\`\`\n\n`;
+          content += `**Generated Output:**\n> ${step.generatedText}\n\n`;
+          content += `---\n\n`;
+      });
+
+      const blob = new Blob([content], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Appendix_Prompts_${new Date().toISOString().split('T')[0]}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
   };
 
   const handleDownloadPart = (part: 'introduction' | 'conflict' | 'resolution') => {
@@ -66,35 +109,46 @@ const StoryTimeline: React.FC<StoryTimelineProps> = ({ steps, vanillaStory, vani
     <div className="space-y-6">
       {/* Header / Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
-        <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-            Comparison View
-        </h3>
+        <div>
+            <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                Scientific Log
+            </h3>
+            <p className="text-[10px] text-slate-500 font-mono">EXPORT RAW DATA FOR PRESENTATION</p>
+        </div>
         
         <div className="flex gap-2 items-center flex-wrap">
-             <span className="text-[10px] text-slate-500 mr-2 uppercase tracking-wider font-bold">Download Partial Logs:</span>
+             {/* Appendix Download Button */}
+             <button 
+                onClick={handleDownloadAppendix}
+                disabled={steps.length === 0 && !vanillaPrompt}
+                className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded transition flex items-center gap-2 shadow-lg shadow-indigo-500/20 font-bold border border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Download all prompts as a Markdown file for your paper's appendix"
+              >
+                  <FileJson size={14} /> Download Prompt Appendix (.md)
+             </button>
+
+             <div className="h-4 w-px bg-slate-700 mx-2 hidden md:block"></div>
+
              <button 
                 onClick={() => handleDownloadPart('introduction')} 
                 disabled={getStepCount(0, 4) === 0}
                 className="px-2 py-1 text-[10px] bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 rounded transition flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed border border-slate-700"
-                title="Download Setup Phase (Steps 0-3)"
               >
-                  <FileText size={10} /> Intro ({getStepCount(0, 4)}/4)
+                  <FileText size={10} /> Intro
               </button>
               <button 
                 onClick={() => handleDownloadPart('conflict')} 
                 disabled={getStepCount(4, 11) === 0}
                 className="px-2 py-1 text-[10px] bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 rounded transition flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed border border-slate-700"
-                title="Download Development Phase (Steps 4-10)"
               >
-                  <FileText size={10} /> Conflict ({getStepCount(4, 11)}/7)
+                  <FileText size={10} /> Conflict
               </button>
               <button 
                 onClick={() => handleDownloadPart('resolution')} 
                 disabled={getStepCount(11, 15) === 0}
                 className="px-2 py-1 text-[10px] bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 rounded transition flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed border border-slate-700"
-                title="Download Resolution Phase (Steps 11-14)"
               >
-                  <FileText size={10} /> Resolution ({getStepCount(11, 15)}/4)
+                  <FileText size={10} /> Res
               </button>
         </div>
       </div>
@@ -161,15 +215,28 @@ const StoryTimeline: React.FC<StoryTimelineProps> = ({ steps, vanillaStory, vani
                             <div className="border-t border-slate-700/30 pt-2 mt-2">
                                 <button 
                                     onClick={() => togglePrompt(index)}
-                                    className="flex items-center gap-1 text-[9px] text-slate-500 hover:text-indigo-300 transition-colors uppercase tracking-wide font-medium"
+                                    className={`flex items-center gap-1 text-[9px] uppercase tracking-wide font-bold transition-colors ${openPrompts[index] ? 'text-indigo-400' : 'text-slate-500 hover:text-indigo-300'}`}
                                 >
                                     <Code size={10} />
-                                    {openPrompts[index] ? 'Hide' : 'Show'} Prompt
+                                    {openPrompts[index] ? 'Hide System Prompt' : 'Inspect System Prompt'}
                                     {openPrompts[index] ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
                                 </button>
+                                
                                 {openPrompts[index] && (
-                                    <div className="mt-2 bg-black/40 p-2 rounded text-[10px] font-mono text-slate-400 whitespace-pre-wrap border border-slate-700/50">
-                                        {step.promptUsed || "No prompt record available."}
+                                    <div className="mt-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                                        <div className="flex justify-between items-center bg-slate-950 border border-slate-700 border-b-0 rounded-t px-3 py-1.5">
+                                            <span className="text-[9px] text-slate-500 font-mono">PROMPT_DEBUG_VIEW</span>
+                                            <button 
+                                                onClick={() => copyToClipboard(step.promptUsed, `step-${index}`)}
+                                                className="flex items-center gap-1 text-[9px] text-slate-400 hover:text-white transition-colors"
+                                            >
+                                                {copiedId === `step-${index}` ? <CheckCircle size={10} className="text-emerald-500" /> : <Copy size={10} />}
+                                                {copiedId === `step-${index}` ? 'Copied' : 'Copy'}
+                                            </button>
+                                        </div>
+                                        <div className="bg-black/60 p-3 rounded-b text-[10px] font-mono text-slate-400 whitespace-pre-wrap border border-slate-700 max-h-60 overflow-y-auto custom-scrollbar select-text">
+                                            {step.promptUsed || "No prompt record available."}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -212,11 +279,19 @@ const StoryTimeline: React.FC<StoryTimelineProps> = ({ steps, vanillaStory, vani
                         {/* Vanilla Prompt Display */}
                         {vanillaPrompt && (
                             <div className="mb-6 group">
-                                <div className="flex items-center gap-2 mb-2 text-amber-500/50 group-hover:text-amber-500 transition-colors text-[10px] font-bold uppercase tracking-wider cursor-help">
-                                    <Code size={10} />
-                                    Baseline Prompt Context
+                                <div className="flex items-center justify-between mb-2">
+                                     <div className="flex items-center gap-2 text-amber-500/50 group-hover:text-amber-500 transition-colors text-[10px] font-bold uppercase tracking-wider cursor-help">
+                                        <Code size={10} />
+                                        Baseline Prompt Context
+                                     </div>
+                                     <button 
+                                        onClick={() => copyToClipboard(vanillaPrompt, 'vanilla')}
+                                        className="text-[9px] text-slate-600 group-hover:text-slate-400 transition-colors flex items-center gap-1"
+                                     >
+                                         {copiedId === 'vanilla' ? <CheckCircle size={10} /> : <Copy size={10} />}
+                                     </button>
                                 </div>
-                                <div className="bg-black/30 p-3 rounded text-[10px] font-mono text-slate-500 group-hover:text-slate-400 transition-colors whitespace-pre-wrap border border-slate-700/30 max-h-32 overflow-y-auto custom-scrollbar">
+                                <div className="bg-black/30 p-3 rounded text-[10px] font-mono text-slate-500 group-hover:text-slate-400 transition-colors whitespace-pre-wrap border border-slate-700/30 max-h-32 overflow-y-auto custom-scrollbar select-text">
                                     {vanillaPrompt}
                                 </div>
                             </div>

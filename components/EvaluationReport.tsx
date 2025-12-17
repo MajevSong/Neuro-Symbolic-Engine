@@ -1,6 +1,6 @@
 import React from 'react';
 import { EvaluationResult } from '../types';
-import { Award, Layers, Sparkles, Download, FileText, Activity, Info, HelpCircle } from 'lucide-react';
+import { Award, Layers, Sparkles, Download, FileText, Activity, Info, HelpCircle, AlignLeft } from 'lucide-react';
 
 interface EvaluationReportProps {
   neuroResult: EvaluationResult | null;
@@ -200,10 +200,10 @@ const EvaluationReport: React.FC<EvaluationReportProps> = ({ neuroResult, vanill
                          <div className="grid grid-cols-3 gap-2">
                             <ScoreCard 
                                 label="CSR" 
-                                score="N/A" 
-                                colorClass="text-slate-600" 
-                                subText="Unconstrained"
-                                description="Not Applicable: Vanilla models do not have symbolic constraints to satisfy."
+                                score={`${vanillaResult.metrics.csr.toFixed(1)}%`} 
+                                colorClass="text-amber-400" 
+                                subText="Structural Adherence"
+                                description="For Vanilla Models: This score is calculated by the AI Judge evaluating how well the story followed a standard narrative arc (Intro->Climax->Res). It is a proxy for CSR."
                             />
                             <ScoreCard 
                                 label="Self-BLEU" 
@@ -212,12 +212,13 @@ const EvaluationReport: React.FC<EvaluationReportProps> = ({ neuroResult, vanill
                                 subText="Diversity" 
                                 description="Diversity Metric (0.0-1.0). Lower is better. Measures how repetitive the baseline story is."
                             />
-                            <ScoreCard 
-                                label="Vocab" 
-                                score={vanillaResult.metrics.uniqueNGrams} 
-                                colorClass="text-slate-300"
-                                subText="Unique 3-grams" 
-                                description="Vocabulary Richness: The count of unique 3-word combinations used."
+                            {/* Replaced Vocab with Total Words for Vanilla context explicitly */}
+                             <ScoreCard 
+                                label="Total Words" 
+                                score={(vanillaResult.metrics as any).totalWords || "N/A"} 
+                                colorClass="text-blue-400"
+                                subText="Volume" 
+                                description="Total word count. Vanilla models often struggle to meet high word count targets."
                             />
                          </div>
                     </div>

@@ -10,7 +10,7 @@ import MatrixVisualizer from './components/MatrixVisualizer';
 import EvaluationReport from './components/EvaluationReport';
 import TrainingPanel from './components/TrainingPanel';
 import ComparisonCharts from './components/ComparisonCharts';
-import { Layout, X, Settings, PanelLeft } from 'lucide-react';
+import { Layout, X, Settings, PanelLeft, Database, Binary, Brain, ArrowRight, ShieldCheck, FileText, RotateCcw } from 'lucide-react';
 
 const App: React.FC = () => {
   // --- State ---
@@ -283,10 +283,9 @@ const App: React.FC = () => {
     setCurrentEvent(EventType.Introduction);
   };
 
-  const visualizerStepIndex = isRunning ? steps.length : (steps.length > 0 ? steps.length - 1 : 0);
-  const boundedStepIndex = Math.min(Math.max(visualizerStepIndex, 0), TOTAL_STEPS - 1);
-  const activeMatrix = matrices[boundedStepIndex];
-  const highlightFrom = steps.length > 0 && isRunning ? steps[steps.length - 1].selectedEvent : (steps.length > 0 ? steps[steps.length - 2]?.selectedEvent : undefined);
+  // Determine current live step for visualization
+  const liveStepIndex = isRunning ? steps.length : (steps.length > 0 ? steps.length - 1 : 0);
+  const boundedStepIndex = Math.min(Math.max(liveStepIndex, 0), TOTAL_STEPS - 1);
 
   return (
     <div className="flex h-screen w-full bg-[#0b0f19] text-slate-200 overflow-hidden font-sans selection:bg-indigo-500/30">
@@ -332,10 +331,9 @@ const App: React.FC = () => {
 
             <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
                 <MatrixVisualizer 
-                    matrix={activeMatrix} 
-                    stepIndex={boundedStepIndex}
-                    highlightFrom={highlightFrom}
-                    highlightTo={currentEvent}
+                    matrices={matrices} 
+                    liveStepIndex={boundedStepIndex}
+                    steps={steps}
                 />
             </div>
 
@@ -367,6 +365,7 @@ const App: React.FC = () => {
                               neuroResult={evaluationResult} 
                               vanillaResult={vanillaEvaluation} 
                               steps={steps}
+                              vanillaStory={vanillaStory}
                           />
                       </section>
                   )}
@@ -396,16 +395,148 @@ const App: React.FC = () => {
       {/* Architecture Modal Overlay */}
       {showArchitecture && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowArchitecture(false)}>
-          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-4xl w-full p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-6xl w-full p-8 shadow-2xl relative overflow-hidden" onClick={e => e.stopPropagation()}>
             <button onClick={() => setShowArchitecture(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={24} /></button>
-            <h2 className="text-2xl font-bold text-white mb-6">System Architecture</h2>
-            <div className="grid grid-cols-4 gap-4 text-center">
-                 {/* ... Content same as before ... */}
-                 <div className="bg-slate-800 p-4 rounded border border-slate-700">1. Data Ingest</div>
-                 <div className="bg-slate-800 p-4 rounded border border-slate-700">2. Matrix Build</div>
-                 <div className="bg-slate-800 p-4 rounded border border-slate-700">3. Neuro Gen</div>
-                 <div className="bg-slate-800 p-4 rounded border border-slate-700">4. Verify Loop</div>
+            
+            <h2 className="text-2xl font-bold text-white mb-8 border-b border-slate-800 pb-4">
+                Hybrid Neuro-Symbolic Architecture
+            </h2>
+            
+            <div className="flex flex-col gap-10">
+                {/* 1. VISUAL FLOWCHART */}
+                <div className="relative flex items-center justify-between p-10 bg-[#0b0f19] rounded-xl border border-slate-800 shadow-inner overflow-hidden">
+                    
+                    {/* Background decorative grid */}
+                    <div className="absolute inset-0 opacity-10 pointer-events-none" 
+                         style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, #475569 1px, transparent 0)', backgroundSize: '24px 24px' }}>
+                    </div>
+
+                    {/* Step 1: Input/Context */}
+                    <div className="relative z-10 flex flex-col items-center gap-3">
+                        <div className="w-16 h-16 rounded-2xl bg-slate-800 border-2 border-slate-600 flex items-center justify-center text-slate-300 shadow-lg">
+                            <Database size={32} />
+                        </div>
+                        <div className="text-center">
+                            <div className="text-sm font-bold text-slate-200">History</div>
+                            <div className="text-[10px] text-slate-500 font-mono">Context Window</div>
+                        </div>
+                    </div>
+
+                    <ArrowRight size={24} className="text-slate-600" />
+
+                    {/* Step 2: System 1 (Symbolic) */}
+                    <div className="relative z-10 flex flex-col items-center gap-3">
+                        <div className="w-20 h-20 rounded-2xl bg-indigo-900/20 border-2 border-indigo-500 flex items-center justify-center text-indigo-400 shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+                            <Binary size={40} />
+                        </div>
+                        <div className="text-center">
+                            <div className="text-sm font-bold text-indigo-300">System 1</div>
+                            <div className="text-[10px] text-indigo-400/60 font-mono">Symbolic Planner</div>
+                        </div>
+                        <div className="absolute -top-6 text-[10px] font-mono text-indigo-500 bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-500/30">
+                            P(E | Context)
+                        </div>
+                    </div>
+
+                    <ArrowRight size={24} className="text-indigo-600" />
+
+                    {/* Step 3: System 2 (Neural) */}
+                    <div className="relative z-10 flex flex-col items-center gap-3">
+                        <div className="w-20 h-20 rounded-2xl bg-pink-900/20 border-2 border-pink-500 flex items-center justify-center text-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.2)]">
+                            <Brain size={40} />
+                        </div>
+                        <div className="text-center">
+                            <div className="text-sm font-bold text-pink-300">System 2</div>
+                            <div className="text-[10px] text-pink-400/60 font-mono">Neural Generator</div>
+                        </div>
+                         <div className="absolute -top-6 text-[10px] font-mono text-pink-500 bg-pink-950/50 px-2 py-0.5 rounded border border-pink-500/30">
+                            Constraint Prompt
+                        </div>
+                    </div>
+
+                    <ArrowRight size={24} className="text-pink-600" />
+
+                    {/* Step 4: Verifier */}
+                    <div className="relative z-10 flex flex-col items-center gap-3">
+                        <div className="w-16 h-16 rounded-2xl bg-emerald-900/20 border-2 border-emerald-500 flex items-center justify-center text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+                            <ShieldCheck size={32} />
+                        </div>
+                         <div className="text-center">
+                            <div className="text-sm font-bold text-emerald-300">Verifier</div>
+                            <div className="text-[10px] text-emerald-400/60 font-mono">NLI Check</div>
+                        </div>
+                    </div>
+                    
+                    <ArrowRight size={24} className="text-emerald-600" />
+
+                     {/* Step 5: Output */}
+                    <div className="relative z-10 flex flex-col items-center gap-3">
+                        <div className="w-16 h-16 rounded-2xl bg-slate-800 border-2 border-slate-600 flex items-center justify-center text-slate-100 shadow-lg">
+                            <FileText size={32} />
+                        </div>
+                        <div className="text-center">
+                            <div className="text-sm font-bold text-slate-200">Story</div>
+                            <div className="text-[10px] text-slate-500 font-mono">Appended Segment</div>
+                        </div>
+                    </div>
+
+                    {/* FEEDBACK LOOP VISUALIZATION */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60%] h-[120px] pointer-events-none">
+                         {/* This SVG draws the curved line from Verifier back to System 2 */}
+                         <svg className="w-full h-full overflow-visible">
+                            <path 
+                                d="M 520 20 C 520 100, 320 100, 320 50" 
+                                fill="none" 
+                                stroke="#ef4444" 
+                                strokeWidth="2" 
+                                strokeDasharray="6 4"
+                                className="opacity-40 animate-pulse"
+                            />
+                            <text x="420" y="90" fill="#ef4444" fontSize="10" fontFamily="monospace" textAnchor="middle">REJECT & RETRY</text>
+                         </svg>
+                         <div className="absolute right-[22%] top-[60%] p-1 bg-red-900/50 rounded-full border border-red-500 text-red-400">
+                             <RotateCcw size={12} />
+                         </div>
+                    </div>
+
+                </div>
+
+                {/* 2. TEXTUAL EXPLANATION */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    
+                    <div className="space-y-3">
+                        <h3 className="text-indigo-400 font-bold flex items-center gap-2">
+                            <Binary size={18} />
+                            System 1: The Planner
+                        </h3>
+                        <p className="text-sm text-slate-400 leading-relaxed">
+                            A discrete <strong>Markov Chain</strong> model acts as the high-level planner. Instead of letting the LLM hallucinate the plot, System 1 selects the next <code className="text-indigo-300 bg-indigo-900/30 px-1 rounded">EventType</code> (e.g., <em>Inciting Incident</em>) based on learned probabilities from the training dataset. This ensures structural integrity {'($P(E_{t+1}|E_t)$)'}.
+                        </p>
+                    </div>
+
+                    <div className="space-y-3">
+                        <h3 className="text-pink-400 font-bold flex items-center gap-2">
+                            <Brain size={18} />
+                            System 2: The Generator
+                        </h3>
+                        <p className="text-sm text-slate-400 leading-relaxed">
+                            A constrained <strong>Large Language Model</strong> (Gemini/Mistral) receives the target event and context. Crucially, it is <em>not</em> asked to "write a story" but to "write a specific segment" that fulfills the structural requirement. Dynamic prompts prevent repetitive loops.
+                        </p>
+                    </div>
+
+                    <div className="space-y-3">
+                        <h3 className="text-emerald-400 font-bold flex items-center gap-2">
+                            <ShieldCheck size={18} />
+                            The Verifier Loop
+                        </h3>
+                        <p className="text-sm text-slate-400 leading-relaxed">
+                            A separate NLI (Natural Language Inference) process evaluates the output. It asks: <em>"Does this text actually constitute a {currentEvent}?"</em>. If confidence is low, the segment is rejected, and System 2 is forced to retry with higher temperature, preventing structural drift.
+                        </p>
+                    </div>
+
+                </div>
             </div>
+
           </div>
         </div>
       )}

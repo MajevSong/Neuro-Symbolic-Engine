@@ -296,22 +296,24 @@ export const evaluateStory = async (fullStory: string, provider: ModelProvider, 
             coherenceScore: { type: Type.NUMBER, description: "Score 1-10 for global coherence" },
             creativityScore: { type: Type.NUMBER, description: "Score 1-10 for creativity/novelty" },
             flowScore: { type: Type.NUMBER, description: "Score 1-10 for pacing and structure" },
+            structuralAdherence: { type: Type.NUMBER, description: "Score 0-100 representing how well the story follows a standard narrative arc (Intro->Climax->Resolution)." },
             critique: { type: Type.STRING, description: "A paragraph critiquing the story's strengths and weaknesses." }
         },
-        required: ["coherenceScore", "creativityScore", "flowScore", "critique"]
+        required: ["coherenceScore", "creativityScore", "flowScore", "structuralAdherence", "critique"]
     };
 
     const prompt = `
       Act as an Expert Literary Critic.
       
       Analyze the following short story:
-      "${fullStory}"
+      "${fullStory.slice(0, 8000)}" 
       
       Evaluate based on:
       1. Global Coherence: Do the events connect logically?
       2. Narrative Arc: Is there a clear beginning, middle, and end?
       3. Creativity: Is the prose engaging and original?
       4. Flow: Does the story move naturally between paragraphs? (Penalty for jagged transitions).
+      5. **Structural Adherence**: Does the story clearly demonstrate a setup, inciting incident, rising action, climax, and resolution? (0-100%).
       
       Return a JSON evaluation.
     `;
@@ -339,15 +341,19 @@ export const evaluateStory = async (fullStory: string, provider: ModelProvider, 
         const json = JSON.parse(cleanJson);
         
         // Calculate Research Metrics
+        const { selfBleu, uniqueNGrams } = calculateSelfBleuProxy(fullStory);
+        const totalWords = fullStory.split(/\s+/).length;
+
         let metrics;
+        
         if (steps) {
+            // Neuro: Calculate CSR mathematically from step verification data
             const csr = calculateCSR(steps);
-            const { selfBleu, uniqueNGrams } = calculateSelfBleuProxy(fullStory);
-            metrics = { csr, selfBleu, uniqueNGrams };
+            metrics = { csr, selfBleu, uniqueNGrams, totalWords };
         } else {
-            // Vanilla metrics (CSR is N/A, calc diversity only)
-            const { selfBleu, uniqueNGrams } = calculateSelfBleuProxy(fullStory);
-            metrics = { csr: 0, selfBleu, uniqueNGrams };
+            // Vanilla: Use the AI Judge's "Structural Adherence" score as a proxy for CSR
+            // This allows comparison on the same chart.
+            metrics = { csr: json.structuralAdherence || 0, selfBleu, uniqueNGrams, totalWords };
         }
 
         return {
